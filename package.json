@@ -1,0 +1,41 @@
+{
+  "name": "typephp-skills",
+  "version": "1.0.0",
+  "description": "Agent skill for TypePHP (PHP to C++ AOT compiler) projects: build, debug, audit, and judge migration feasibility.",
+  "keywords": [
+    "typephp",
+    "php",
+    "aot",
+    "compiler",
+    "agent-skill",
+    "skills",
+    "claude-code",
+    "workbuddy",
+    "mcp",
+    "tpc"
+  ],
+  "license": "MIT",
+  "author": "yangweijie",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yangweijie/typephp-skills.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yangweijie/typephp-skills/issues"
+  },
+  "homepage": "https://github.com/yangweijie/typephp-skills#readme",
+  "bin": {
+    "typephp-skills": "bin/cli.js"
+  },
+  "files": [
+    "bin/",
+    "skills/",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=16"
+  },
+  "scripts": {
+    "pack:check": "npm pack --dry-run"
+  }
+}
