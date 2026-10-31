@@ -51,7 +51,7 @@ npx github:yangweijie/typephp-skills list     # 列出包内技能
 npx github:yangweijie/typephp-skills path     # 打印包内 skills 目录绝对路径
 ```
 
-首次执行会拉取仓库（约 1–2 秒），之后走 npm 缓存。装完重启客户端才会加载。
+首次执行会拉取仓库（几秒，取决于网络），之后走 npm 缓存。装完重启客户端才会加载。
 
 ### 手动安装
 
