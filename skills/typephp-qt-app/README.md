@@ -168,7 +168,7 @@ qtphp run . --difftest       # 表格/树 diff 的边界（选中、行 id、pat
 - 实测重心在 **Windows / MSVC**（`windeployqt`、`/Zc:__cplusplus`、`runtime.ini`）；macOS 的 `.app` 打包与 Apple Silicon 的 `--nano` 有实测记录；Linux 覆盖度最低。
 - `--nano` 的产物体积数字来自技能内的记录，**只在 Apple Silicon 上验证过**，其他平台未复验。
 - 规则 16、17 是**上游缺陷**（已标注 `Upstream defect` / `Upstream gap`），不是使用者的错；修复方式在各自条目里写明。
-- `scripts/scaffold.sh` 生成的 `.bat` 里含有作者机器的默认路径（`PHP_HOME`、`vcvars64.bat`），首次使用需要按本机环境改。
+- `scripts/scaffold.sh` 不内置任何机器相关路径：`PHP_HOME` 取自 `PHP_HOME_DIR` 或 `$PHP_HOME`，`QT_ROOT` 取自第 3 个参数。没给就在生成的 `.bat` 里留空，`build.bat` 会直接报「未设置」并退出，而不是拖到链接阶段才失败。`vcvars64.bat` 由生成的脚本按 `VCVARS` → VS 2022 / 2019 默认安装位置自行探测。
 
 ## 许可
 

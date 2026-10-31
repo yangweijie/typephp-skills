@@ -22,7 +22,9 @@
 #   <target-dir>/assets/icon.png         (placeholder — replace it)
 #
 # Both also create project.yml, runtime.ini, assets/README.txt, build.bat,
-# run.bat and package.bat. The generated project compiles and runs as-is; only
+# run.bat and package.bat. The generated project compiles and runs as-is once
+# PHP_HOME and QT_ROOT point at your installs; the .bat files check both up
+# front and say exactly what is missing instead of failing at link time. Only
 # the UI, the data layer and the assets are meant to be replaced.
 #
 # <app_name> must be a lowercase identifier (letters, digits, underscore).
@@ -49,11 +51,28 @@ fi
 
 TARGET="${POSITIONAL[0]}"
 APP="${POSITIONAL[1]}"
-QT_ROOT="${POSITIONAL[2]:-<QT_ROOT>}"
+QT_ROOT="${POSITIONAL[2]:-}"
 
-# Where the TypePHP package lives. Substituted into runtime.ini; keep it in
-# sync with the value baked into the generated .bat files.
-PHP_HOME_DIR="${PHP_HOME_DIR:-D:/git/php/tpc_v0.9.4_windows_x64}"
+# Where the TypePHP toolchain lives. Substituted into runtime.ini *and* into the
+# generated .bat files, so it is written once and stays in sync. Resolution:
+#   1. PHP_HOME_DIR=<path>  explicit, wins
+#   2. $PHP_HOME            whatever the shell already exports
+#   3. empty — the generated .bat files then stop with "PHP_HOME is not set"
+# Never bake a machine-specific default in here: a plausible-looking wrong path
+# is worse than no path, because it fails later at link time instead of up front.
+PHP_HOME_DIR="${PHP_HOME_DIR:-${PHP_HOME:-}}"
+
+# The `set` lines written into the generated .bat files. Empty when the value is
+# unknown, so the file carries no meaningless `set "X="` line — the guard in the
+# .bat then reports "not set" instead of pointing at a path that never existed.
+PHP_HOME_LINE=""
+if [ -n "$PHP_HOME_DIR" ]; then
+  PHP_HOME_LINE="if not defined PHP_HOME set \"PHP_HOME=$PHP_HOME_DIR\""
+fi
+QT_ROOT_LINE=""
+if [ -n "$QT_ROOT" ]; then
+  QT_ROOT_LINE="if not defined QT_ROOT set \"QT_ROOT=$QT_ROOT\""
+fi
 
 if ! printf '%s' "$APP" | grep -Eq '^[a-z][a-z0-9_]*$'; then
   echo "error: app_name must match ^[a-z][a-z0-9_]*\$ (got: $APP)" >&2
@@ -124,18 +143,64 @@ EOF
 
 cat > "$TARGET/build.bat" <<EOF
 @echo off
-REM Build the ${APP} TypePHP + Qt app. Edit VCVARS / PHP_HOME / QT_ROOT first.
+REM Build the ${APP} TypePHP + Qt app.
+REM PHP_HOME / QT_ROOT were written by scaffold.sh. Override either one by
+REM setting it in your shell before running this file.
 setlocal
-set "VCVARS=C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Auxiliary\\Build\\vcvars64.bat"
+${PHP_HOME_LINE}
+${QT_ROOT_LINE}
+
+REM --- Qt kit -------------------------------------------------------------
+if not defined QT_ROOT (
+  echo error: QT_ROOT is not set.
+  echo        Pass it as the 3rd argument to scaffold.sh, or set QT_ROOT to
+  echo        your Qt kit folder, e.g. C:\\Qt\\6.8.0\\msvc2022_64
+  exit /b 1
+)
+if not exist "%QT_ROOT%\\include\\QtWidgets" (
+  echo error: QT_ROOT does not look like a Qt kit: "%QT_ROOT%"
+  echo        expected: %QT_ROOT%\\include\\QtWidgets
+  echo        Set QT_ROOT, or pass it as the 3rd argument to scaffold.sh.
+  exit /b 1
+)
+
+REM --- MSVC environment ---------------------------------------------------
+REM cl.exe on PATH is not enough: INCLUDE must point at the MSVC headers, or
+REM tpc dies with C1083 "cannot open include file malloc.h".
+REM Order: an explicit VCVARS wins, then the default VS 2022 / 2019 locations.
+if defined VCVARS goto :have_vcvars
+for %%S in (BuildTools Community Professional Enterprise) do (
+  if exist "%ProgramFiles%\\Microsoft Visual Studio\\2022\\%%S\\VC\\Auxiliary\\Build\\vcvars64.bat" set "VCVARS=%ProgramFiles%\\Microsoft Visual Studio\\2022\\%%S\\VC\\Auxiliary\\Build\\vcvars64.bat"
+)
+if defined VCVARS goto :have_vcvars
+for %%S in (BuildTools Community Professional Enterprise) do (
+  if exist "%ProgramFiles(x86)%\\Microsoft Visual Studio\\2019\\%%S\\VC\\Auxiliary\\Build\\vcvars64.bat" set "VCVARS=%ProgramFiles(x86)%\\Microsoft Visual Studio\\2019\\%%S\\VC\\Auxiliary\\Build\\vcvars64.bat"
+)
+:have_vcvars
+if not defined VCVARS (
+  echo error: vcvars64.bat not found.
+  echo        Install "Desktop development with C++", or set VCVARS to your copy.
+  exit /b 1
+)
 if not exist "%VCVARS%" (
-  echo error: vcvars64.bat not found - install MSVC 2022 or fix VCVARS above
+  echo error: VCVARS points at a file that does not exist: "%VCVARS%"
   exit /b 1
 )
 call "%VCVARS%" >nul
 
-set "PHP_HOME=D:\\git\\php\\tpc_v0.9.4_windows_x64"
+REM --- toolchain ----------------------------------------------------------
+if not defined PHP_HOME (
+  echo error: PHP_HOME is not set.
+  echo        Point it at your TypePHP toolchain folder (the one holding tpc.exe),
+  echo        or re-run scaffold.sh with PHP_HOME=... exported.
+  exit /b 1
+)
+if not exist "%PHP_HOME%\\tpc.exe" (
+  echo error: tpc.exe not found in PHP_HOME="%PHP_HOME%"
+  echo        Set PHP_HOME to your TypePHP toolchain folder.
+  exit /b 1
+)
 set "PHPX_HOME=%PHP_HOME%\\phpx"
-set "QT_ROOT=${QT_ROOT}"
 set "PATH=%QT_ROOT%\\bin;%PHP_HOME%;%PATH%"
 cd /d "%~dp0"
 
@@ -153,9 +218,22 @@ cat > "$TARGET/run.bat" <<EOF
 @echo off
 REM Deploy Qt deps and run. Optional arg 1: a .png path -> render once and exit.
 setlocal
-set "PHP_HOME=D:\\git\\php\\tpc_v0.9.4_windows_x64"
+${PHP_HOME_LINE}
+${QT_ROOT_LINE}
+if not defined PHP_HOME (
+  echo error: PHP_HOME is not set - it holds the runtime DLLs this app loads.
+  exit /b 1
+)
+if not defined QT_ROOT (
+  echo error: QT_ROOT is not set.
+  exit /b 1
+)
+if not exist "%QT_ROOT%\\bin\\windeployqt.exe" (
+  echo error: windeployqt.exe not found under QT_ROOT="%QT_ROOT%"
+  echo        Set QT_ROOT to your Qt kit folder, e.g. C:\\Qt\\6.8.0\\msvc2022_64
+  exit /b 1
+)
 set "PHPX_HOME=%PHP_HOME%\\phpx"
-set "QT_ROOT=${QT_ROOT}"
 set "PATH=%QT_ROOT%\\bin;%PHP_HOME%;%PHPX_HOME%\\lib;%PATH%"
 cd /d "%~dp0"
 
@@ -193,9 +271,22 @@ REM
 REM It then runs the packaged app with a crippled PATH to prove nothing is
 REM missing. Pass --no-verify to skip that (e.g. on a headless CI box).
 setlocal
-set "PHP_HOME=D:\\git\\php\\tpc_v0.9.4_windows_x64"
+${PHP_HOME_LINE}
+${QT_ROOT_LINE}
+if not defined PHP_HOME (
+  echo error: PHP_HOME is not set - it holds the runtime DLLs this package ships.
+  exit /b 1
+)
+if not defined QT_ROOT (
+  echo error: QT_ROOT is not set.
+  exit /b 1
+)
+if not exist "%QT_ROOT%\\bin\\windeployqt.exe" (
+  echo error: windeployqt.exe not found under QT_ROOT="%QT_ROOT%"
+  echo        Set QT_ROOT to your Qt kit folder, e.g. C:\\Qt\\6.8.0\\msvc2022_64
+  exit /b 1
+)
 set "PHPX_HOME=%PHP_HOME%\\phpx"
-set "QT_ROOT=${QT_ROOT}"
 set "PATH=%QT_ROOT%\\bin;%PHP_HOME%;%PHPX_HOME%\\lib;%PATH%"
 cd /d "%~dp0"
 
@@ -248,7 +339,7 @@ echo [5/5] self-containment check ^(clean PATH^)
 set "CHECK_SHOT=%DIST%\\selfcheck.png"
 if exist "%CHECK_SHOT%" del /Q "%CHECK_SHOT%"
 set "SAVED_PATH=%PATH%"
-set "PATH=C:\\Windows\\System32;C:\\Windows"
+set "PATH=%SystemRoot%\\System32;%SystemRoot%"
 set "PHP_INI_SCAN_DIR="
 if exist "%DIST%\\runtime.ini" set "PHPRC=%DIST%\\runtime.ini"
 set "${SHOT_VAR}=%CHECK_SHOT%"
@@ -317,10 +408,13 @@ EOF
 # cmd.exe needs CRLF. With LF-only files it tolerates plain commands but fails
 # on labels with "The system cannot find the batch label specified" — which is
 # exactly what package.bat's --no-verify path would hit.
+# awk rather than `sed -i`: BSD sed (macOS) reads the -i argument as a backup
+# suffix and then treats the filename as the script, so `sed -i 's/.../.../'`
+# dies with "unterminated substitute pattern".
 for bat in "$TARGET"/*.bat; do
   [ -f "$bat" ] || continue
-  sed -i 's/\r$//' "$bat"
-  sed -i 's/$/\r/' "$bat"
+  tmp="$bat.tmp"
+  awk '{ sub(/\r$/, ""); printf "%s\r\n", $0 }' "$bat" > "$tmp" && mv "$tmp" "$bat"
 done
 
 # Lint before handing over. cmd has no dry-run or syntax-check mode, so these
@@ -332,8 +426,18 @@ if ! bash "$HERE/lint-bats.sh" "$TARGET"; then
 fi
 
 echo "scaffolded $KIND '$APP' into $TARGET"
+if [ -n "$PHP_HOME_DIR" ]; then
+  echo "  PHP_HOME = $PHP_HOME_DIR"
+else
+  echo "  PHP_HOME = (not set) — export PHP_HOME, or set it before running build.bat"
+fi
+if [ -n "$QT_ROOT" ]; then
+  echo "  QT_ROOT  = $QT_ROOT"
+else
+  echo "  QT_ROOT  = (not set) — pass it as the 3rd argument, or export QT_ROOT before build.bat"
+fi
 echo "next:"
-echo "  1. run $TARGET/build.bat      (edit QT_ROOT / PHP_HOME inside it first)"
+echo "  1. run $TARGET/build.bat      (fails fast if PHP_HOME / QT_ROOT / MSVC are not found)"
 echo "  2. run $TARGET/run.bat        (or: run.bat shot.png to render once and exit)"
 echo "  3. run $TARGET/package.bat    to assemble dist/ for shipping"
 if [ "$TRAY" -eq 1 ]; then

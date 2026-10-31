@@ -212,7 +212,7 @@ scripts/scaffold.sh <dir> <app_name> [qt_root]          # window app
 scripts/scaffold.sh --tray <dir> <app_name> [qt_root]   # system-tray app
 ```
 
-**The scaffold output is checked: it compiles and renders a real window as-is.** Treat it as the known-good baseline. If your build fails in a way the scaffold does not, the difference is in your edits. `run.bat shot.png` renders one frame and exits.
+**The scaffold output is checked: it compiles and renders a real window as-is** — once `PHP_HOME` and `QT_ROOT` point at your installs. The generated `.bat` files resolve both (environment variable first, then whatever `scaffold.sh` wrote) and stop with a one-line error naming the missing piece, instead of failing later at link time. `vcvars64.bat` is located automatically (`VCVARS`, then the default VS 2022 / 2019 locations), so `INCLUDE` is always set. Treat the output as the known-good baseline: if your build fails in a way the scaffold does not, the difference is in your edits. `run.bat shot.png` renders one frame and exits.
 
 ---
 

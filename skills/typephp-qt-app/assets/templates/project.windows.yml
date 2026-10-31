@@ -8,7 +8,8 @@ sources:
   - php-src      # .stub.php bridge declarations
   - cpp-src      # C++ bridge implementation
 
-# Replace <QT_ROOT> with the real Qt 6 MSVC x64 install, e.g.
+# Qt 6 MSVC x64 install. scaffold.sh fills in the include/lib paths below when
+# you pass the kit as its 3rd argument; otherwise replace them yourself, e.g.
 #   D:/tools/Qt/6.9.3/msvc2022_64
 cxx-flags:
   - '/Zc:__cplusplus'      # required by the Qt MSVC SDK
