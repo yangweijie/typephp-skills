@@ -1,0 +1,26 @@
+{
+  "skill_name": "typephp-project",
+  "evals": [
+    {
+      "id": 0,
+      "eval_name": "new-cli-project-from-scratch",
+      "prompt": "帮我用 TypePHP 起一个新项目，做一个命令行小工具：读一个 CSV 文件，按某列分组统计总和，把结果按数值降序打印出来。放在 D:/Temp/eval-cli 下，最后要能编译成 exe 跑起来。",
+      "expected_output": "A working TypePHP project at D:/Temp/eval-cli with project.yml + src/, code that compiles (real build, not just --dry), and a binary that actually runs on a sample CSV. Agent should have checked TypePHP restrictions before writing, used the universal-method / std container idioms, avoided global-scope executable statements, and reported which verification rungs it reached (including whether the runtime DLL dependency matters).",
+      "files": []
+    },
+    {
+      "id": 1,
+      "eval_name": "debug-check-code-green-but-crashes",
+      "prompt": "我这段 TypePHP 代码 check_code 一直是 OK，但编译出来的程序一跑就报 `class 'OrderRepo' is undefined`，怎么回事？文件在 D:/Temp/eval-debug/src/main.php，同目录还有个 OrderRepo.php。帮我修好并确认能跑。",
+      "expected_output": "Agent identifies that undefined symbols resolve at runtime so check_code (--dry) cannot see them, finds the actual cause (file not included in the compiled set / wrong input shape / single-file input), fixes it, and re-verifies by actually building and running — not by re-running check_code. Should explain why a green check was not evidence.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "eval_name": "port-stock-php-to-typephp",
+      "prompt": "把 D:/Temp/eval-port/app.php 这段普通 PHP 改写成能过 TypePHP 编译的版本。它用了 Composer 的 autoload、几个 array_* 函数、还有一段全局的初始化代码。",
+      "expected_output": "Agent consults list_restrictions/search_docs before editing, rewrites global executable code into functions/main(), replaces autoload/global init with the TypePHP-appropriate approach, keeps array operations working (universal methods or plain functions), and verifies with real compile+run rather than only check_code. Should flag anything that is a genuine limit rather than silently working around it.",
+      "files": []
+    }
+  ]
+}
