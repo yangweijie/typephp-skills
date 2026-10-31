@@ -1,7 +1,7 @@
 # typephp-skills
 
-> Agent skill for [TypePHP](https://github.com/swoole/typephp) — the PHP → C++ AOT compiler.
-> 面向 TypePHP 的 Agent 技能包：新建、改造、调试、审计项目，以及判断一份现有 PHP 代码能不能迁移到 AOT。
+> Agent skills for [TypePHP](https://github.com/swoole/typephp) — the PHP → C++ AOT compiler.
+> 面向 TypePHP 的 Agent 技能包：命令行项目的新建、改造、调试、审计，以及用 Qt 做原生桌面 GUI。
 
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D16-brightgreen.svg)](./package.json)
@@ -89,7 +89,16 @@ class 'OrderRepo' is undefined，帮我修好并确认能跑。
 评估一下 vendor/psr/log 能不能迁到 TypePHP，给我一份失败清单。
 ```
 
-## 技能内容
+```
+用 TypePHP + Qt 做个桌面待办应用，左边任务表格、上面搜索框，
+选中一行能推进状态或删除，最后要能打包成能双击运行的 app。
+```
+
+## 包含的技能
+
+安装命令会把这个仓库里的技能**全部**装进技能目录。目前有两个。
+
+### `typephp-project` — 命令行项目：写、调、审计
 
 | 文件 | 作用 |
 |---|---|
@@ -98,6 +107,20 @@ class 'OrderRepo' is undefined，帮我修好并确认能跑。
 | `scripts/` | `preflight.sh/.bat` 环境体检、`audit-dir.sh/.bat` 批量兼容性扫描 |
 | `evals/` | 30 个属性与类型注解回归用例 + 3 个端到端场景 |
 | `*.stub.php` | import-library 桩文件样例 |
+
+核心主张：`check_code` 绿灯只代表编译器接受了语法和类型，**不是**程序能跑。项目在 Rung 4 真正执行过一次之前不算验证完成。
+
+### `typephp-qt-app` — 原生桌面 GUI
+
+| 文件 | 作用 |
+|---|---|
+| `SKILL.md` | 两条路由（`typephp-qt` 包 / 手写 C++ 桥）、18 条硬规则、Windows 工具链陷阱 |
+| `references/`（7 篇） | AOT 陷阱、桥接模式、控件目录、Qt 模块、构建部署、QML 路线、系统托盘 |
+| `assets/templates/` | 三平台 `project.yml`、`runtime.ini`、桥/桩/主程序骨架、托盘模板 |
+| `scripts/` | `scaffold.sh` 一键生成可编译项目、`lint-bats.sh` 检查生成的 `.bat` |
+| `evals/` | 8 个端到端场景 |
+
+核心主张：**TypePHP 不能画窗口，Qt 才能**。默认走 `yangweijie/typephp-qt` 包，你只写 PHP；只有在需要包未暴露的控件时才手写桥。
 
 深文档是**按需加载**的：`SKILL.md` 只保留决策所需的最小上下文，其余在对应场景才读。这样技能占用的上下文可控，又不牺牲深度。
 
@@ -111,8 +134,9 @@ class 'OrderRepo' is undefined，帮我修好并确认能跑。
 | C++ 工具链（MSVC / g++ / clang++） | 真实编译 | `C/C++ compiler executable not found` |
 | typephp-mcp 服务 | 12 个 MCP 工具、结构化诊断 | 技能会降级为直接调 `tpc --dry` |
 | PHP 解释器（可选） | 跑 `evals/` 回归 | 只影响验证，不影响构建 |
+| Qt 6 + `qtphp`（仅桌面 GUI） | 编译窗口程序 | 只能做命令行项目 |
 
-完整的环境准备、typephp-mcp 的构建与接入方式，见 [`skills/typephp-project/README.md`](./skills/typephp-project/README.md)。
+完整的环境准备、typephp-mcp 的构建与接入方式，见 [`skills/typephp-project/README.md`](./skills/typephp-project/README.md)；Qt 侧见 [`skills/typephp-qt-app/README.md`](./skills/typephp-qt-app/README.md)。
 
 ## 更新
 

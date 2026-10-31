@@ -90,9 +90,9 @@ function install(opts) {
     console.log(`  ✓ ${name}`);
   }
 
-  console.log(`
-完成。重启客户端后技能才会被加载。
-验证方式：确认 ${path.join(dest, names[0], 'SKILL.md')} 直接可见（加载器不会递归查找嵌套的 SKILL.md）。`);
+  console.log('\n完成。重启客户端后技能才会被加载。');
+  console.log('验证方式：确认以下文件直接可见（加载器不会递归查找嵌套的 SKILL.md）：');
+  for (const name of names) console.log(`  ${path.join(dest, name, 'SKILL.md')}`);
 }
 
 function main() {
