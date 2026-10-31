@@ -114,7 +114,7 @@ class 'OrderRepo' is undefined，帮我修好并确认能跑。
 
 | 文件 | 作用 |
 |---|---|
-| `SKILL.md` | 两条路由（`typephp-qt` 包 / 手写 C++ 桥）、18 条硬规则、Windows 工具链陷阱 |
+| `SKILL.md` | 两条路由（`typephp-qt` 包 / 手写 C++ 桥）、20 条硬规则、Windows 工具链陷阱 |
 | `references/`（7 篇） | AOT 陷阱、桥接模式、控件目录、Qt 模块、构建部署、QML 路线、系统托盘 |
 | `assets/templates/` | 三平台 `project.yml`、`runtime.ini`、桥/桩/主程序骨架、托盘模板 |
 | `scripts/` | `scaffold.sh` 一键生成可编译项目、`lint-bats.sh` 检查生成的 `.bat` |

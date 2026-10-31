@@ -1,6 +1,6 @@
 ---
 name: typephp-qt-app
-description: Build native desktop GUI applications with TypePHP (the PHP AOT compiler) and Qt. The default route is the `yangweijie/typephp-qt` Composer package. That package gives you declarative widget trees and the `qtphp` CLI (doctor, new, build, run, package, test, lint). It also gives you a pure-PHP bridge double for unit tests and one-command packaging on Windows, macOS and Linux. This skill also covers the advanced hand-written C++ bridge route. Use that route when you need a custom C++ widget. Use it also when you work with `php_*` functions, `php::Box`, Variant/QString conversion, or the manual event loop. The skill lists the AOT pitfalls that only surface in compiled binaries. Use this skill in these cases. The user wants a desktop UI backed by compiled PHP. The user mentions TypePHP together with Qt, QtWidgets, QML, QMainWindow, QPushButton, tpc, project.yml with Qt link flags, phpx, windeployqt, qtphp, or WidgetTree. The user asks to turn a PHP program into a native windowed app. This last case applies even when the user never says "Qt" or "TypePHP" but clearly builds a native GUI on top of compiled PHP.
+description: Build native desktop GUI apps with TypePHP (PHP→C++ AOT) and Qt. Covers both routes — the default `yangweijie/typephp-qt` Composer package (declarative WidgetTree, `qtphp doctor/new/build/run/package`, a pure-PHP bridge double for tests) and the hand-written C++ bridge (`php_*` functions, `php::Box`, QString conversion, manual event loop) for widgets the package does not expose. Includes the AOT pitfalls that only surface in the compiled binary and never under the interpreter. Use when the user wants a desktop UI backed by compiled PHP, or mentions TypePHP together with Qt, QtWidgets, QML, QMainWindow, QPushButton, tpc, project.yml with Qt link flags, phpx, windeployqt, qtphp or WidgetTree — even if they never say "Qt" or "TypePHP" but are clearly building a native GUI on compiled PHP.
 ---
 
 # TypePHP × Qt — Native Desktop Apps
@@ -16,12 +16,14 @@ You can get that bridge in two ways. **Pick route 0 unless you have a reason not
 
 ---
 
-# Route 0 — the `typephp-qt` package (default)
+## Route 0 — the `typephp-qt` package (default)
 
 `yangweijie/typephp-qt` is the packaged form of everything in route 1. You never touch C++. You describe the UI as a PHP array. The bundled bridge diffs it against the live Qt widgets each frame.
 
+Pin the minor version: the CLI flags and `WidgetTree` signatures below were written against **v0.9.x** (latest v0.9.5, 2026-10-15). A floating constraint will silently pick up a release that moves them.
+
 ```bash
-composer require yangweijie/typephp-qt
+composer require "yangweijie/typephp-qt:^0.9"
 qtphp doctor            # check PHP / tpc / Qt / compiler / PHPUnit before anything else
 qtphp new myapp         # scaffold a project that compiles as-is
 cd myapp
@@ -31,7 +33,7 @@ qtphp run .             # run; args after the path pass straight through
 qtphp package .         # self-contained bundle + self-check (scans every Mach-O, not just the exe)
 ```
 
-## The shape of a package app
+### The shape of a package app
 
 Three ideas make up the whole framework:
 
@@ -79,13 +81,13 @@ function main(int $argc, array $argv): void
 
 Full control/property/event tables: the package `README.md`. Multi-window and timers: also there. One `QtApp` is one window, so `run()` only pumps its own. Multi-window apps pump each in a `while` loop. The tray is declarative too: `setTray(['icon' => …, 'tooltip' => …, 'visible' => …, 'menu' => […]])`. Activation arrives as an **id-less** `tray` event. Catch it with `onAny('tray', …)`. The gesture is in `$event['value']` (`left` / `right` / `double` / `middle`). Once you pass `menu`, Qt owns the right-click and items fire ordinary `menu` events.
 
-## Why this route first
+### Why this route first
 
 - **No C++ to maintain.** The bridge can never drift from your Qt or PHPX version.
 - **The domain layer is unit-testable without Qt.** The package ships `FakeBridge`, a pure-PHP stand-in for the `qt_*` functions. So `qtphp test` runs with no Qt and no compiler. Write your logic against it.
 - **One CLI covers all three platforms.** `qtphp` picks the right entry yml, deploys runtime DLLs, and packages a `.app` / `dist/` / `ld-lib` bundle with a self-check.
 
-## Check without a human
+### Check without a human
 
 Every package app should keep three headless switches. The scaffold's do:
 
@@ -101,11 +103,11 @@ Set `$app->headless(true)` for these. It makes `message()` return its default an
 
 ---
 
-# Route 1 — hand-write the bridge
+## Route 1 — hand-write the bridge
 
 Everything here is what the package already does for you. Read it when you need a widget the package does not expose. Read it also when you work inside the TypePHP compiler repo. That repo's `examples/qt-taskboard` is the canonical hand-written reference.
 
-## The architecture (memorize this shape)
+### The architecture (memorize this shape)
 
 ```
         PHP (brain)              C++ bridge (nerves)            Qt (face)
@@ -127,83 +129,34 @@ Two files declare the boundary. The compiler needs **both**:
 | `php-src/<name>.stub.php` | PHP-visible signatures. **Function bodies must be empty.** This is the only place the compiler learns the bridge's types. |
 | `cpp-src/<name>.cc` | The implementations. PHP `foo_bar()` ⇄ C++ `php_foo_bar()`. |
 
-## Step 0 — Pick the UI route
+### Step 0 — Pick the UI route
 
 | Route | Use when | Cost |
 |---|---|---|
 | **Qt Widgets** | Desktop tools, forms, tables, dashboards. **Default.** | Lowest. No QML engine, no `qml/` directory to deploy. |
 | **QML / Quick** | Heavy animation, touch/mobile feel, fully custom styling. | Needs Qt6Qml + Qt6Quick and `windeployqt --qmldir`. Without them the app starts blank. |
 
-Start with Widgets unless the user explicitly asks for QML. If they do, read `references/qml-route.md`. You can also mix. `QtQuickWidgets` embeds a QML scene in a Widgets window.
+Start with Widgets unless the user explicitly asks for QML. If they do, read `references/qml-route.md`. You can also mix: `QtQuickWidgets` embeds a QML scene in a Widgets window.
 
-## The workflow
+### The workflow
 
-### 1. Write the PHP domain layer — no Qt involved
+1. **Domain layer first, no Qt.** Ordinary PHP classes for data and rules. Keep them Qt-free so they unit-test with a plain interpreter (`php tests/store_test.php`) and no build — `examples/qt-taskboard/tests/` runs with just `php`.
+2. **Declare the bridge in `php-src/<name>.stub.php`** — PHP-visible signatures with **empty bodies**. This is the only place the compiler learns the bridge's types.
 
-Ordinary PHP classes for data and rules. Keep them Qt-free, so they unit-test with a plain interpreter (`php tests/store_test.php`) and no build. The domain test in `examples/qt-taskboard/tests/` runs with just `php`.
+   ```php
+   <?php
+   function qt_board_create(string $title): mixed {}
+   function qt_board_is_open(mixed $window): bool {}
+   function qt_board_poll_event(mixed $window): array {}
+   function qt_board_set_view(mixed $window, array $rows, array $metrics, string $selectedId): void {}
+   function qt_board_destroy(mixed $window): void {}
+   ```
 
-### 2. Declare the bridge in a `.stub.php`
+   **Arrays in, arrays out.** `array` crosses cheaply and keeps C++ dumb. Opaque C++ objects travel as `mixed` (a `php::Box`), never as raw pointers.
 
-PHP-side signatures with **empty bodies**. The compiler uses this file for types only.
-
-```php
-<?php
-/** Qt renders the view and returns user input; all decisions live in PHP. */
-function qt_board_create(string $title): mixed {}
-function qt_board_is_open(mixed $window): bool {}
-function qt_board_process_events(mixed $window): void {}
-function qt_board_poll_event(mixed $window): array {}
-function qt_board_set_view(mixed $window, array $rows, array $metrics, string $selectedId): void {}
-function qt_board_show_error(mixed $window, string $message): void {}
-function qt_board_destroy(mixed $window): void {}
-```
-
-Design rule: **arrays in, arrays out.** `array` crosses cheaply and keeps C++ dumb. Opaque C++ objects travel as `mixed` (a `php::Box`), never as raw pointers.
-
-### 3. Implement the bridge in C++
-
-Four parts, always. Full annotated code in `references/bridge-pattern.md`. Copy-paste skeleton in `assets/templates/bridge.skeleton.cc`.
-
-1. **Conversion helpers** — `QString ↔ php::String`, always UTF-8.
-2. **A `php::Box` subclass** holding every Qt pointer plus an event queue. This is the `mixed` PHP holds.
-3. **A `QApplication`** created lazily on first `create`, stylesheet applied once.
-4. **`php_*` entry points** — one per stub function, each delegating to the Box.
-
-### 4. Write `project.yml`
-
-Qt needs include paths, a C++ standard, and link libraries. Ready-to-edit Windows/macOS/Linux variants in `assets/templates/`. What each flag is for in `references/build-and-deploy.md`.
-
-```yaml
-name: typephp_taskboard
-mode: bin
-cxx-std: c++17
-sources:            # files OR directories; directories are scanned
-  - main.php
-  - app
-  - php-src
-  - cpp-src
-cxx-flags:
-  - '/Zc:__cplusplus'          # required by the Qt MSVC SDK
-  - '/permissive-'
-  - '/I"<QT_ROOT>/include"'
-  - '/I"<QT_ROOT>/include/QtCore"'
-  - '/I"<QT_ROOT>/include/QtGui"'
-  - '/I"<QT_ROOT>/include/QtWidgets"'
-ld-flags:
-  - '/LIBPATH:"<QT_ROOT>/lib"'
-  - Qt6Widgets.lib
-  - Qt6Gui.lib
-  - Qt6Core.lib
-```
-
-### 5. Compile, deploy, run
-
-```bash
-tpc project.yml --job 2 --no-progress     # expect: Build successful: <name>.exe
-windeployqt --release --no-translations <name>.exe   # Qt DLLs AND plugins
-```
-
-Then run with the runtime ini pointed at any PHP extensions you use. `windeployqt` is **not enough** for shipping. It copies Qt and nothing else. You must also copy the TypePHP/PHPX runtime DLLs and your `assets/`. Per-platform commands, the DLL closure, and the self-check trick are in `references/build-and-deploy.md`.
+3. **Implement `cpp-src/<name>.cc`** — always the same four parts: `QString ↔ php::String` helpers (UTF-8); a `php::Box` subclass holding every Qt pointer plus an event queue; a `QApplication` created lazily on the first `create`; one `php_*` entry point per stub function. Annotated code: `references/bridge-pattern.md`. Skeleton: `assets/templates/bridge.skeleton.cc`.
+4. **Write `project.yml`** — `cxx-std: c++17`, `sources:` listing `main.php app php-src cpp-src` (directories are scanned), Qt include paths, `/Zc:__cplusplus` + `/permissive-`, and the three `Qt6*.lib`. Ready-to-edit Windows/macOS/Linux variants live in `assets/templates/`; what each flag does is in `references/build-and-deploy.md`.
+5. **Compile, deploy, run** — `tpc project.yml --job 2 --no-progress`, then `windeployqt --release --no-translations <name>.exe`. `windeployqt` is **not enough** to ship: it copies Qt and nothing else, so you still need the TypePHP/PHPX runtime DLLs and your `assets/`. Per-platform commands and the DLL closure: `references/build-and-deploy.md`.
 
 Scaffold a whole project in one shot:
 
@@ -216,9 +169,9 @@ scripts/scaffold.sh --tray <dir> <app_name> [qt_root]   # system-tray app
 
 ---
 
-# Hard rules
+## Hard rules
 
-Each of these silently breaks a build, a run, or a click. Rules 1–6 are **AOT-specific**. They do not reproduce under a normal PHP interpreter, so a passing unit test proves nothing about them. Details and fixes: `references/aot-pitfalls.md`.
+Each of these silently breaks a build, a run, or a click. Rules 1–8 are **AOT-specific**. They do not reproduce under a normal PHP interpreter, so a passing unit test proves nothing about them. Details and fixes: `references/aot-pitfalls.md` — its entries 1–8 are numbered to match, and entry 9 is rule 20.
 
 1. **The compiler checks closure arity exactly.** AOT-compiled closures raise `ArgumentCountError` on an extra argument. Plain PHP silently ignores it. `function () {}` called as `$f($event)` works everywhere except in the compiled binary. There it fails **only when that control is actually clicked**. Call each handler with the argument count it declares, or dispatch defensively.
 2. **Global scope takes declarations only.** No `require_once`/`require` anywhere, not at global scope and not inside a function. It is `All execution code must be within a function, found stray code`. Cross-file visibility comes from `project.yml`'s `sources:`, never from `require`.
@@ -226,24 +179,26 @@ Each of these silently breaks a build, a run, or a click. Rules 1–6 are **AOT-
 4. **Closure parameters need explicit types** — `function (array $event)`, not `function ($event)`. Without them you get `The variable $event is undefined`.
 5. **A modal dialog blocks forever with no user.** `QMessageBox::exec()` / `QFileDialog::get*()` spin a nested loop. In CI, `--selftest`, or any headless run, gate them behind a headless flag so they return a default instead.
 6. **Do not reuse one variable for two reflection types.** `$ref = new ReflectionMethod(...)` then `$ref = new ReflectionFunction(...)` is `Cannot re-assign typed object`. Use two variables. AOT **does** support reflection. `getNumberOfRequiredParameters()` works on closures, `[obj,'method']`, and function-name strings.
+7. **`php::Array` converts to `bool` implicitly, so `&$array` through the bridge is not a reference.** Pass `&$spec` where the parameter is pointer-typed and you get `Array(true)` — an array whose value is a bool. It surfaces at runtime as `parameter 1 must be of type array, bool given`. Drop the `&` when an `array`-typed value crosses the bridge.
+8. **Bridge calls from a namespaced file need a leading `\`.** The `qt_*` functions are global. Inside `namespace App;`, write `\qt_board_create(...)`; otherwise the call resolves against your namespace and fails to compile.
 
-Rules 7–14 apply to both routes:
+Rules 9–16 apply to both routes:
 
-7. **Stub bodies must be empty.** A body in a `.stub.php` is a compile error.
-8. **The C++ symbol needs the `php_` prefix.** PHP `qt_board_create` ⇄ C++ `php_qt_board_create`. Wrong ⇒ unresolved symbol at link time.
-9. **`QApplication` must exist before any widget.** Create it lazily behind a null check, so it happens exactly once.
-10. **You drive the event loop yourself.** Qt must not block on `exec()`. Pump in ~16 ms slices and drain a queue into PHP. The package does this for you.
-11. **Deploy plugins, not just DLLs.** Skipping `windeployqt` gives "could not find or load the Qt platform plugin windows". For QML add `--qmldir`.
-12. **UTF-8 at the boundary** — always `QString::fromUtf8` / `toUtf8`, or CJK text mangles.
-13. **Include the header for every class you name.** Also declare a file-scope `static` *above* the class that uses it. Qt has no guaranteed transitive includes. Both mistakes surface as unrelated-looking `C2027` / `C2065`.
-14. **A tray app inverts two assumptions**: `setQuitOnLastWindowClosed(false)`, and loop `while (is_alive)` not `while (is_open)`. See `references/system-tray.md`.
+9. **Stub bodies must be empty.** A body in a `.stub.php` is a compile error.
+10. **The C++ symbol needs the `php_` prefix.** PHP `qt_board_create` ⇄ C++ `php_qt_board_create`. Wrong ⇒ unresolved symbol at link time.
+11. **`QApplication` must exist before any widget.** Create it lazily behind a null check, so it happens exactly once.
+12. **You drive the event loop yourself.** Qt must not block on `exec()`. Pump in ~16 ms slices and drain a queue into PHP. The package does this for you.
+13. **Deploy plugins, not just DLLs.** Skipping `windeployqt` gives "could not find or load the Qt platform plugin windows". For QML add `--qmldir`.
+14. **UTF-8 at the boundary** — always `QString::fromUtf8` / `toUtf8`, or CJK text mangles.
+15. **Include the header for every class you name.** Also declare a file-scope `static` *above* the class that uses it. Qt has no guaranteed transitive includes. Both mistakes surface as unrelated-looking `C2027` / `C2065`.
+16. **A tray app inverts two assumptions**: `setQuitOnLastWindowClosed(false)`, and loop `while (is_alive)` not `while (is_open)`. See `references/system-tray.md`.
 
-Rules 15–18 are API/compiler traps found by running a real app. Rules 15–17 compile fine and fail silently at runtime. Rule 18 fails at compile time, but points at generated code, not your source:
+Rules 17–20 are API/compiler traps found by running a real app. Rules 17–19 compile fine and fail silently at runtime. Rule 20 fails at compile time, but points at generated code, not your source:
 
-15. **`WidgetTree::tabs()` takes a `title => children` map, not tab nodes.** `tabs(['页一' => [...], '页二' => [...]], ['id' => 't'])`. The implementation re-wraps every element with `tab()`. That function's `$title` is `string`. So passing pre-built `tab(...)` nodes throws `ArgumentTypeError: Argument #1 ($title) must be of type string, int given` (the int is the array index). The package's own `docs/` shows the wrong form. `tests/WidgetTreeTest.php` shows the right one. The same shape applies to `stack()`.
-16. **The bridge applies tab/stack `current` *before* the children exist, so first-frame declarative selection silently no-ops.** `buildNode` runs `applyNodeProps` and only then recurses into children. So on the frame the bridge creates a `QTabWidget`, it clamps `setCurrentIndex(1)` back to 0. Because the prop signature was already recorded, no later frame retries it. Changing `current` on a *later* frame works. `patch(['op'=>'call','method'=>'select',...])` works immediately. **Consequence for `--shot`**: a tab you select only via `current` on frame 1 will not appear. Render one frame, `patch` the `select`, then render again. Also pass an **int**, not a string. The bridge does `value.toInt()`, and `'1'` becomes `0`. (Upstream defect. Fixed by deferring the apply to after `syncChildren`.)
-17. **`table` has no row-height control, so the widget elides multi-line cell text to `…`.** Row height comes from the widget default. `qtRebuildTable` never calls `resizeRowsToContents()`. A 3-line cell in a normal-height row renders as `...`. Do you want a multi-line cell (a graph column, a wrapped diff)? Then keep it to **one line**. Otherwise add the `row_height` prop or an auto-resize to the bridge. (Upstream gap.)
-18. **A property read inside a `&&` short-circuit cannot be written in the same `if` body.** `if ($n > 0 && $n !== $obj->limit) { $obj->limit = $n; }` fails to compile with `use of undeclared identifier '_object_prop_state_x__limit'` in a generated `.cc`. The short-circuit becomes an immediately-invoked lambda, and that lambda declares the property reference inside its own scope. Hoist the read into a local first. Details: `references/aot-pitfalls.md` #9.
+17. **`WidgetTree::tabs()` takes a `title => children` map, not tab nodes.** `tabs(['页一' => [...], '页二' => [...]], ['id' => 't'])`. The implementation re-wraps every element with `tab()`. That function's `$title` is `string`. So passing pre-built `tab(...)` nodes throws `ArgumentTypeError: Argument #1 ($title) must be of type string, int given` (the int is the array index). The package's own `docs/` shows the wrong form. `tests/WidgetTreeTest.php` shows the right one. The same shape applies to `stack()`.
+18. **The bridge applies tab/stack `current` *before* the children exist, so first-frame declarative selection silently no-ops.** `buildNode` runs `applyNodeProps` and only then recurses into children. So on the frame the bridge creates a `QTabWidget`, it clamps `setCurrentIndex(1)` back to 0. Because the prop signature was already recorded, no later frame retries it. Changing `current` on a *later* frame works. `patch(['op'=>'call','method'=>'select',...])` works immediately. **Consequence for `--shot`**: a tab you select only via `current` on frame 1 will not appear. Render one frame, `patch` the `select`, then render again. Also pass an **int**, not a string. The bridge does `value.toInt()`, and `'1'` becomes `0`. (Upstream defect. Fixed by deferring the apply to after `syncChildren`.)
+19. **`table` has no row-height control, so the widget elides multi-line cell text to `…`.** Row height comes from the widget default. `qtRebuildTable` never calls `resizeRowsToContents()`. A 3-line cell in a normal-height row renders as `...`. Do you want a multi-line cell (a graph column, a wrapped diff)? Then keep it to **one line**. Otherwise add the `row_height` prop or an auto-resize to the bridge. (Upstream gap.)
+20. **A property read inside a `&&` short-circuit cannot be written in the same `if` body.** `if ($n > 0 && $n !== $obj->limit) { $obj->limit = $n; }` fails to compile with `use of undeclared identifier '_object_prop_state_x__limit'` in a generated `.cc`. The short-circuit becomes an immediately-invoked lambda, and that lambda declares the property reference inside its own scope. Hoist the read into a local first. Details: `references/aot-pitfalls.md` #9.
 
 ## Windows runtime + toolchain
 
@@ -253,11 +208,11 @@ Rules 15–18 are API/compiler traps found by running a real app. Rules 15–17 
 - **Two `tpc` distributions exist and their runtimes differ.** A native release package is self-contained (`phpx.dll`/`SDK/` sit beside the executable). The Composer-installed driver instead needs a `swoole/phpx` source tree whose build artifacts usually do not exist yet. Picking the wrong one fails with `The PHPX runtime library was not found at: ...\phpx\build\phpx.dll`. `qtphp` probes for the one that has a runtime. `TPC`/`TPC_DIR` override it. See `references/aot-pitfalls.md`.
 - **In a *consumer* project `qtphp` cannot find `tpc` on its own.** `bin/qtphp` sets `$GLOBALS['rootDir'] = dirname(__DIR__)`. That is the **package** directory (`vendor/yangweijie/typephp-qt`), not your project. So it looks for `vendor/yangweijie/typephp-qt/vendor/bin/tpc.php`, which does not exist. Then `qtphp doctor` reports `tpc: 未找到`. Fix: install the driver in your own project (`composer require --dev swoole/typephp`) **and** export `TPC="$PWD/vendor/bin/tpc.php"` (or add it to `composer.json` `scripts`). Without it every `build`/`run`/`package` fails at the toolchain probe, not at compile time.
 
-# Reference index
+## Reference index
 
 Read the file matching what you are doing. Do not read them all.
 
-- `references/aot-pitfalls.md` — **read this before your first compiled run.** The AOT traps (rules 1–6). Each entry gives the symptom, the root cause and the fix. Also the two-`tpc` supply routes.
+- `references/aot-pitfalls.md` — **read this before your first compiled run.** The AOT traps (rules 1–8, plus rule 20 as entry 9). Each entry gives the symptom, the root cause and the fix. Also the two-`tpc` supply routes.
 - `references/bridge-pattern.md` — the C++/PHP bridge in depth: conversion helpers, `php::Box`, the event queue, the event loop, every `php_*` entry-point pattern, and the declarative diff the package uses.
 - `references/qt-widgets-catalog.md` — **every** Qt Widgets class in the install, grouped by purpose. Consult when choosing controls.
 - `references/qt-modules.md` — which Qt modules the install has, which it does not, and the three edits to link a new one.

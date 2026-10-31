@@ -6,6 +6,8 @@ TypePHP compiles PHP ahead-of-time to native code. The compiler is stricter than
 
 Read this before your first compiled run.
 
+**Numbering:** entries 1–8 here are SKILL.md hard rules 1–8, one-to-one. Entry 9 is SKILL.md rule 20 (it sits last here because it is the only one the compiler catches for you).
+
 ---
 
 ## 1. Closure arity is validated exactly

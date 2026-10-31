@@ -14,7 +14,7 @@
 - [前置条件](#前置条件)
 - [快速开始](#快速开始)
 - [目录结构](#目录结构)
-- [18 条硬规则](#18-条硬规则)
+- [20 条硬规则](#20-条硬规则)
 - [无人工验证](#无人工验证)
 - [已知边界](#已知边界)
 - [许可](#许可)
@@ -90,7 +90,7 @@ npx github:yangweijie/typephp-skills install --force     # 覆盖旧版本（先
 
 | 依赖 | 用途 | 缺失时的表现 |
 |---|---|---|
-| `composer require yangweijie/typephp-qt` | 包路线的一切 | 没有 `qtphp` 命令 |
+| `composer require "yangweijie/typephp-qt:^0.9"` | 包路线的一切 | 没有 `qtphp` 命令 |
 | Qt 6（含 Widgets；QML 另需 Qt6Qml/Qt6Quick） | 编译与运行窗口 | 链接失败或启动黑屏 |
 | `tpc`（TypePHP 工具链） | 编译 PHP | `qtphp doctor` 报 `tpc: 未找到` |
 | C++ 工具链（MSVC / Xcode CLT / g++） | 编译桥 | 编译阶段失败 |
@@ -105,7 +105,7 @@ npx github:yangweijie/typephp-skills install --force     # 覆盖旧版本（先
 ## 快速开始
 
 ```bash
-composer require yangweijie/typephp-qt
+composer require "yangweijie/typephp-qt:^0.9"
 qtphp doctor          # 先确认环境
 qtphp new myapp       # 生成一个能直接编译的项目
 cd myapp
@@ -120,7 +120,7 @@ qtphp package .       # 打自包含包，并做自检
 
 ```
 typephp-qt-app/
-├── SKILL.md                      # 路由决策、18 条硬规则、Windows 工具链陷阱
+├── SKILL.md                      # 路由决策、20 条硬规则、Windows 工具链陷阱
 ├── README.md
 ├── references/                   # 7 篇按需加载的深文档
 │   ├── aot-pitfalls.md           # 只在编译产物里出现的 9 类陷阱
@@ -135,18 +135,19 @@ typephp-qt-app/
 │   ├── scaffold.sh               # 一键生成可编译项目（窗口 / 托盘两种）
 │   └── lint-bats.sh              # 检查生成的 .bat 里的 cmd 陷阱
 └── evals/
-    └── evals.json                # 8 个端到端场景
+    ├── evals.json                # 8 个行为场景（prompt + 评分要点）
+    └── README.md                 # 每个场景在防什么、怎么评分
 ```
 
-## 18 条硬规则
+## 20 条硬规则
 
 每一条都会**静默**毁掉一次构建、一次运行或一次点击。分三组：
 
-- **规则 1–6：AOT 特有**，在普通 PHP 解释器下不复现，所以单测全绿证明不了什么。包括闭包参数个数被严格校验、全局作用域只能有声明、`main()` 必须是全局函数、闭包参数必须显式标类型、模态对话框会永久阻塞、反射变量不能复用。
-- **规则 7–14：两条路由都适用**。桩函数体必须为空、C++ 符号要有 `php_` 前缀、`QApplication` 必须先于任何控件、事件循环得自己泵、部署要带 Qt 插件而不只是 DLL、边界处统一 UTF-8、每个用到的类都要 include、托盘应用要反转两个假设。
-- **规则 15–18：API / 编译器陷阱**，靠跑真应用才挖出来的。其中 15–17 编译通过、运行时静默失效（`tabs()` 的参数形状、首帧 `current` 选择无效、`table` 没有行高控制导致多行单元格被省略成 `…`），18 是编译期报错但指向生成的代码而不是你的源码。
+- **规则 1–8：AOT 特有**，在普通 PHP 解释器下不复现，所以单测全绿证明不了什么。包括闭包参数个数被严格校验、全局作用域只能有声明、`main()` 必须是全局函数、闭包参数必须显式标类型、模态对话框会永久阻塞、反射变量不能复用、`php::Array` 会隐式转成 `bool`（所以 `&$array` 过桥不是引用）、命名空间里调用桥函数要加前导 `\`。
+- **规则 9–16：两条路由都适用**。桩函数体必须为空、C++ 符号要有 `php_` 前缀、`QApplication` 必须先于任何控件、事件循环得自己泵、部署要带 Qt 插件而不只是 DLL、边界处统一 UTF-8、每个用到的类都要 include、托盘应用要反转两个假设。
+- **规则 17–20：API / 编译器陷阱**，靠跑真应用才挖出来的。其中 17–19 编译通过、运行时静默失效（`tabs()` 的参数形状、首帧 `current` 选择无效、`table` 没有行高控制导致多行单元格被省略成 `…`），20 是编译期报错但指向生成的代码而不是你的源码。
 
-全文与修法见 `SKILL.md`，逐条的症状/根因/修复见 `references/aot-pitfalls.md`。
+全文与修法见 `SKILL.md`，逐条的症状/根因/修复见 `references/aot-pitfalls.md`（条目 1–8 与规则 1–8 一一对应，条目 9 是规则 20）。
 
 ## 无人工验证
 
@@ -164,7 +165,7 @@ qtphp run . --difftest       # 表格/树 diff 的边界（选中、行 id、pat
 
 ## 已知边界
 
-- 技能编写于 2026-10，`yangweijie/typephp-qt` 当前最新为 **v0.9.5（2026-10-15）**。技能内**没有逐条标注版本基线**，升级包之后请以 `qtphp doctor`、包自带的 `README.md` 和 `tests/WidgetTreeTest.php` 为准。
+- 技能编写于 2026-10，`yangweijie/typephp-qt` 当前最新为 **v0.9.5（2026-10-15）**。命令行与 `WidgetTree` 签名按 **v0.9.x** 记录，安装时请钉 `^0.9`；升级到 0.10 之后，先跑一遍 `qtphp doctor`，并以包自带的 `README.md`、`tests/WidgetTreeTest.php` 为准。
 - 实测重心在 **Windows / MSVC**（`windeployqt`、`/Zc:__cplusplus`、`runtime.ini`）；macOS 的 `.app` 打包与 Apple Silicon 的 `--nano` 有实测记录；Linux 覆盖度最低。
 - `--nano` 的产物体积数字来自技能内的记录，**只在 Apple Silicon 上验证过**，其他平台未复验。
 - 规则 16、17 是**上游缺陷**（已标注 `Upstream defect` / `Upstream gap`），不是使用者的错；修复方式在各自条目里写明。
