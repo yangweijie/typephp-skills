@@ -75,6 +75,8 @@ function main(int $argc, array $argv): void
 - **Give every control you touch an `id`.** Nodes without one get a structural-path id (`_p0.1.2`). That id is stable but unreadable. `text('name_input')` needs a real id.
 - **Containers**: `vbox hbox grid form group frame scroll tabs tab stack page split spacer separator`.
 - **Controls**: `label button lineedit textedit spin doublespin slider progress checkbox radio combo list table tree image link`.
+
+Signatures that are easy to guess wrong (verified against `src/WidgetTree.php`): `WidgetTree::table(array $columns, array $rows, array $props = [])` — `$columns` is a flat list of header strings, `$rows` a list of cell-value arrays. Row identity for the `select` event and for selection restore across re-renders comes from a separate **`row_ids` prop** (positional strings; default is the row index). `WidgetTree::webView(string $url = '', array $props = [])`.
 - **Embedded web**: `webview`. The build picks the backend at compile time, per platform. Windows = WebView2 (full Chromium + JS). macOS = the system WKWebView (JS + remote `https://`). Anything else = QTextBrowser (HTML subset, **no JS**, remote `url` unsupported). Ask at runtime with `QtApp::webViewBackend()` (`webview2` / `wkwebview` / `textbrowser`) and `webViewSupportsJs()`. Degrade instead of failing silently. History is driven by `webViewReload()` / `webViewGoBack()` / `webViewGoForward($id)`.
 - **Events**: `click press release change submit commit toggle select activate itemClick cell expand collapse tab close menu timer tray loaded navigating title`. Register with `on($id, $type, $handler)` or `onAny($type, $handler)`. When both match, **both fire** (specific first, then the wildcard). That is why `onAny` is the place for logging and telemetry.
 - **`patch()`** is the imperative escape hatch for hot paths (log streams, progress ticks). It can `set` props or `call` one of `appendRows / clear / setText / setValue / select / focus`. It is a bypass. The next `render()` re-syncs from the tree, so write long-lived changes back into state.
@@ -89,7 +91,7 @@ Full control/property/event tables: the package `README.md`. Multi-window and ti
 
 ### Check without a human
 
-Every package app should keep three headless switches. The scaffold's do:
+Every package app should keep three headless switches. The scaffold's do — well, two of them as of v0.9.5: the `qtphp new` template ships `--shot` and `--selftest`, but **not** `--difftest`; add that one yourself if you need the diff-boundary check.
 
 ```bash
 qtphp run . --shot out.png   # render a few frames, save PNG, exit — visual check
@@ -165,7 +167,7 @@ scripts/scaffold.sh <dir> <app_name> [qt_root]          # window app
 scripts/scaffold.sh --tray <dir> <app_name> [qt_root]   # system-tray app
 ```
 
-**The scaffold output is checked: it compiles and renders a real window as-is** — once `PHP_HOME` and `QT_ROOT` point at your installs. The generated `.bat` files resolve both (environment variable first, then whatever `scaffold.sh` wrote) and stop with a one-line error naming the missing piece, instead of failing later at link time. `vcvars64.bat` is located automatically (`VCVARS`, then the default VS 2022 / 2019 locations), so `INCLUDE` is always set. Treat the output as the known-good baseline: if your build fails in a way the scaffold does not, the difference is in your edits. `run.bat shot.png` renders one frame and exits.
+**The scaffold output is checked: it compiles and renders a real window as-is** — once `PHP_HOME` and `QT_ROOT` point at your installs. The generated `.bat` files resolve both (environment variable first, then whatever `scaffold.sh` wrote) and stop with a one-line error naming the missing piece, instead of failing later at link time. `vcvars64.bat` is located automatically (`VCVARS`, then the default VS 2022 / 2019 locations under `%ProgramFiles%` / `%ProgramFiles(x86)%`), so `INCLUDE` is always set — **but the probe only covers the C: default locations. VS installed on another drive is not found; export `VCVARS=<path>` in that case** (measured on a box with BuildTools under `D:\Program Files (x86)`). Treat the output as the known-good baseline: if your build fails in a way the scaffold does not, the difference is in your edits. `run.bat shot.png` renders one frame and exits.
 
 ---
 
@@ -201,6 +203,9 @@ Rules 17–20 are API/compiler traps found by running a real app. Rules 17–19 
 20. **A property read inside a `&&` short-circuit cannot be written in the same `if` body.** `if ($n > 0 && $n !== $obj->limit) { $obj->limit = $n; }` fails to compile with `use of undeclared identifier '_object_prop_state_x__limit'` in a generated `.cc`. The short-circuit becomes an immediately-invoked lambda, and that lambda declares the property reference inside its own scope. Hoist the read into a local first. Details: `references/aot-pitfalls.md` #9.
 
 ## Windows runtime + toolchain
+
+- **Bare `tpc project.yml` without the MSVC environment dies with a misleading error.** Measured on tpc 0.9.4 and 0.9.5: outside `vcvars64.bat`, even a trivial one-file project fails in `Translator::prepare()` with `Uncaught TypeError: TypePhp\Translator::getAbsolutePath(): Return value must be of type string, bool returned` — a missing-path symptom, not a yml problem. Set `INCLUDE`/`LIB` manually is **not** enough; the full `vcvars64.bat` environment is what it probes. Build through the generated `build.bat` (which calls vcvars) or wrap the call the same way.
+- **`qtphp new` rejects absolute target paths.** It joins the argument onto `getcwd()`, so `qtphp new D:\proj\app` writes into `<cwd>\D:\proj\app` and every mkdir fails. Pass a relative name from the directory you want the project in. (Measured v0.9.5.)
 
 - **`PDO_SQLITE` (or any PHP extension) needs a runtime ini.** Point `PHPRC` at an ini that sets `extension_dir` and `extension=php_pdo_sqlite.dll`. Also clear `PHP_INI_SCAN_DIR`. Otherwise the app starts and dies inside the embedded PHP runtime.
 - **`--no-console`** for a GUI-subsystem build on Windows (not needed for macOS bundles).

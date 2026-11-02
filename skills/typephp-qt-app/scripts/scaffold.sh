@@ -191,7 +191,7 @@ call "%VCVARS%" >nul
 REM --- toolchain ----------------------------------------------------------
 if not defined PHP_HOME (
   echo error: PHP_HOME is not set.
-  echo        Point it at your TypePHP toolchain folder (the one holding tpc.exe),
+  echo        Point it at your TypePHP toolchain folder ^(the one holding tpc.exe^),
   echo        or re-run scaffold.sh with PHP_HOME=... exported.
   exit /b 1
 )
@@ -323,7 +323,7 @@ if exist "assets" (
 if exist "runtime.ini" (
   copy /Y "runtime.ini" "%DIST%\\" >nul
   echo       runtime.ini copied - launch with PHPRC pointing at it if the
-  echo       app loads PHP extensions (e.g. pdo_sqlite)
+  echo       app loads PHP extensions ^(e.g. pdo_sqlite^)
 )
 
 REM ---- self-containment check --------------------------------------------

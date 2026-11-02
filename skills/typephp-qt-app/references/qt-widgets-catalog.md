@@ -35,6 +35,7 @@ Every public class in the QtWidgets module of Qt 6.9.3, grouped by what you woul
 | `QScrollArea` | Makes any widget scrollable. |
 | `QStackedWidget` | Multiple pages, one visible at a time (wizard/tab-without-tabs). |
 | `QTabWidget` | Tabbed pages. |
+| `QTabBar` | Just the tab strip (what `QTabWidget` uses internally) — for custom tabbed containers. |
 | `QToolBox` | Vertical collapsible sections. |
 | `QMdiArea` / `QMdiSubWindow` | MDI document workspace. |
 | `QDockWidget` | Dockable/floating panel inside a `QMainWindow`. |
@@ -119,6 +120,7 @@ These own their data, so you can populate them directly from a PHP array — **p
 | `QTreeWidget` + `QTreeWidgetItem`, `QTreeWidgetItemIterator` | Hierarchical tree. |
 | `QColumnView` | Cascading column browser. |
 | `QUndoView` | Shows an undo stack. |
+| `QUndoStack` / `QUndoGroup` | Command-pattern undo/redo (QtGui classes surfaced through QtWidgets headers); the stack feeds `QUndoView` or an app menu. |
 
 ## 8. Item views — model/view base & delegates
 
@@ -129,6 +131,7 @@ These own their data, so you can populate them directly from a PHP array — **p
 | `QHeaderView` | Row/column headers; resize modes live here. |
 | `QAbstractItemDelegate` / `QItemDelegate` / `QStyledItemDelegate` | Custom cell painting/editing. |
 | `QDataWidgetMapper` | Binds model columns to individual widgets. |
+| `QFileSystemModel` | Ready-made model for the local file system — feeds a `QTreeView`/`QListView` with no C++ model code. |
 | `QItemEditorFactory` / `QItemEditorCreator` / `QItemEditorCreatorBase` / `QStandardItemEditorCreator` | Default editor widget registry. |
 
 ## 9. Menus, toolbars, status & actions
@@ -140,6 +143,7 @@ These own their data, so you can populate them directly from a PHP array — **p
 | `QToolBar` | Toolbar strip. |
 | `QStatusBar` | Bottom status area of a `QMainWindow`. |
 | `QWidgetAction` | Embeds an arbitrary widget inside a menu/toolbar. |
+| `QAction` / `QActionGroup` | The backbone of menus/toolbars — one object drives a menu item, a toolbar button and its `QShortcut` at once; the group makes items check-exclusive. |
 | `QToolTip` | Custom tooltips. |
 | `QWhatsThis` | "What's this?" help mode. |
 
@@ -181,6 +185,7 @@ For diagrams, canvases, node editors, charts-by-hand. Heavier than plain widgets
 | `QGesture` / `QGestureEvent` / `QGestureRecognizer` | Gesture framework. |
 | `QPanGesture` / `QPinchGesture` / `QSwipeGesture` / `QTapGesture` / `QTapAndHoldGesture` | Concrete gestures. |
 | `QScroller` / `QScrollerProperties` | Kinetic ("flick") scrolling for touch. |
+| `QShortcut` | Keyboard shortcut bound to a window (F5, Ctrl+S) — the keyboard half of a `QAction`. |
 
 ## 13. Styling, painting & system integration
 

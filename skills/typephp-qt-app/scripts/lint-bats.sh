@@ -75,6 +75,37 @@ for f in "$DIR"/*.bat; do
     problems+=("has setlocal but no endlocal")
   fi
 
+  # --- 7. Unescaped parens in echo text inside a block ----------------------
+  # Inside a parenthesized block, a literal ( or ) in an echo's text unbalances
+  # the parser: the block tail then runs unconditionally. Measured here with a
+  # PHP_HOME error branch whose "(the one holding tpc.exe)" made the script
+  # print only the block's LAST echo and exit 1 even though PHP_HOME was set.
+  # Escape as ^( ^). REM lines and already-escaped carets are ignored; depth is
+  # tracked from lines ending in "(" (block open) and lines starting with ")"
+  # (block close), which covers `) else (` too.
+  while IFS= read -r hit; do
+    [ -n "$hit" ] && problems+=("unescaped paren in echo text inside a block: $hit")
+  done <<EOF
+$(awk '{
+  line = $0
+  sub(/\r$/, "", line)
+  low = tolower(line)
+  if (low ~ /^[[:space:]]*rem([[:space:]]|$)/) next
+  bad = ""
+  if (low ~ /^[[:space:]]*echo([[:space:]]|$)/) {
+    probe = line
+    gsub(/\^\(/, "", probe)
+    gsub(/\^\)/, "", probe)
+    if (probe ~ /[()]/) bad = NR ": " line
+  }
+  sub(/[[:space:]]+$/, "", line)
+  sub(/^[[:space:]]+/, "", line)
+  if (substr(line, 1, 1) == ")") depth--
+  if (substr(line, length(line), 1) == "(") depth++
+  if (bad != "") print bad
+}' "$f")
+EOF
+
   if [ "${#problems[@]}" -gt 0 ]; then
     fail=1
     echo "LINT FAIL: $name"

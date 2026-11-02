@@ -169,7 +169,7 @@ qtphp run . --difftest       # 表格/树 diff 的边界（选中、行 id、pat
 - 实测重心在 **Windows / MSVC**（`windeployqt`、`/Zc:__cplusplus`、`runtime.ini`）；macOS 的 `.app` 打包与 Apple Silicon 的 `--nano` 有实测记录；Linux 覆盖度最低。
 - `--nano` 的产物体积数字来自技能内的记录，**只在 Apple Silicon 上验证过**，其他平台未复验。
 - 规则 16、17 是**上游缺陷**（已标注 `Upstream defect` / `Upstream gap`），不是使用者的错；修复方式在各自条目里写明。
-- `scripts/scaffold.sh` 不内置任何机器相关路径：`PHP_HOME` 取自 `PHP_HOME_DIR` 或 `$PHP_HOME`，`QT_ROOT` 取自第 3 个参数。没给就在生成的 `.bat` 里留空，`build.bat` 会直接报「未设置」并退出，而不是拖到链接阶段才失败。`vcvars64.bat` 由生成的脚本按 `VCVARS` → VS 2022 / 2019 默认安装位置自行探测。
+- `scripts/scaffold.sh` 不内置任何机器相关路径：`PHP_HOME` 取自 `PHP_HOME_DIR` 或 `$PHP_HOME`，`QT_ROOT` 取自第 3 个参数。没给就在生成的 `.bat` 里留空，`build.bat` 会直接报「未设置」并退出，而不是拖到链接阶段才失败。`vcvars64.bat` 由生成的脚本按 `VCVARS` → VS 2022 / 2019 默认安装位置（`%ProgramFiles%` / `%ProgramFiles(x86)%`）自行探测；**VS 装在非默认盘时探测不到，需先导出 `VCVARS=<路径>`**。生成的 `.bat` 内 echo 文本里的括号必须写成 `^( ^)` —— 在 `if (...)` 块内未转义的括号会让块尾部无条件执行（实测：`PHP_HOME` 已设置仍触发「未设置」分支退出）。
 
 ## 许可
 

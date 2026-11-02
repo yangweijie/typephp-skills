@@ -43,3 +43,22 @@ load-bearing point in it; wording, ordering and extra detail do not matter.
 Run the set again after any change to `SKILL.md`, and after upgrading `yangweijie/typephp-qt`
 (packagist, latest v0.9.5): case 3, 6 and 8 all depend on package/toolchain behaviour that can move
 between releases.
+
+## Last run
+
+2026-11-02, after the 0.9.5 end-to-end verification. Method: one fresh subagent per case, given only
+`SKILL.md` (references on demand), answered in Chinese; graded against `expected_output`.
+
+**8/8 pass.** Two grading notes:
+
+- Case 3: the rubric lists `runtime.ini`/`PHPRC` among the causes to rank, but that is a runtime-stage
+  concern — for a link-stage `LNK2019` naming it would be wrong. The passing answer correctly excluded
+  it; consider rewording the rubric.
+- Case 5: the rubric asks for a Reflection-based arity probe at registration. The passing answer fixed
+  it by adding the parameter and prescribing `--selftest`, which is the simpler correct fix; treat the
+  Reflection probe as an alternative, not a requirement.
+
+Observed weakness this run exposed: both case 1 and case 2 guessed `WidgetTree::table()`'s shape wrong
+(real signature is `table(array $columns, array $rows, array $props = [])`, row ids via a `row_ids`
+prop). SKILL.md now pins those signatures directly, so re-run cases 1 and 2 after any package upgrade
+that touches `WidgetTree`.
