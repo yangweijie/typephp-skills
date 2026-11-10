@@ -48,6 +48,24 @@
       "prompt": "typephp 编出来的 Qt 程序 25 MB，客户嫌大。有没有办法完全不链接 PHP 运行时，把产物压到几 MB？",
       "expected_output": "`qtphp build . --nano`: php-nano and PHPX sources are compiled straight into the artifact so it links no PHP runtime at all (Apple Silicon verified: ~4.4 MB artifact vs ~25 MB embed; packaged .app 64.1 vs 83.6 MiB). Should add that the same entry yml works (nano ignores php-builder:, templates pin cxx-std: c++17 + optimize: 2), that only Apple Silicon is verified on real hardware, and that the remaining bulk is Qt + ICU (ICU ~56% of the .app), not PHP — so nano is not a way to shrink Qt.",
       "files": []
+    },
+    {
+      "id": 9,
+      "prompt": "我用 typephp-qt 做桌面应用，主界面是普通 Widgets 布局，但中间要放一块动画仪表盘（设计给了 .qml 文件，用 import QtQuick）。怎么嵌进去？编译和部署要注意什么？",
+      "expected_output": "Package route: WidgetTree::qml('assets/xxx.qml', [props]) as a leaf node in the tree, with node props id + read (property names to expose) + signals (signal names wired as event types). Must state it is a compile-time flag: project.yml needs /DQT_QML plus QtQml/QtQuick/QtQuickWidgets include dirs and Qt6Qml/Qt6Quick/Qt6QuickWidgets libs — a default qtphp new scaffold compiles qt_qml.cc but leaves the flag off, and the widget then degrades to a diagnostic placeholder label (assert qmlAvailable() first). PHP→QML via props (replayed after qmlReload), QML→PHP via signals whose event type is the signal name with a payload snapshot of read props, and value($id) reads back QML-mutated properties. Errors are silent by design and land in qmlStatus($id) errors array — a selftest must assert that array is empty, and must not assert on status (platform-dependent: loading on macOS 6.12, ready on Windows 6.9.3, both offscreen). Headless: QT_QPA_PLATFORM=offscreen + QT_QUICK_BACKEND=software; QWidget::grab does not capture QML content so no --shot pixel assertions. Deployment: qtphp build deploys the 7-DLL QML closure automatically; no qml/ directory is needed for import QtQuick (built-in qrc, measured on both platforms); scope-cautious about Controls.",
+      "files": []
+    },
+    {
+      "id": 10,
+      "prompt": "GitHub Actions 上给 typephp Qt 项目装 Qt，jurplel/install-qt-action 配了 modules: qtdeclarative，结果一步就挂：ERROR: The packages ['qtdeclarative'] were not found while parsing XML of package information! 本地明明装了 qtdeclarative。怎么修？",
+      "expected_output": "Diagnose that qtdeclarative is NOT an addon for Qt 6 Windows desktop: it ships in the base component's DownloadableArchives (qtbase/qtsvg/qtdeclarative/qttools/qttranslations/d3dcompiler_47/opengl32sw, verified in Qt's Updates.xml), and there is no addons.qtdeclarative entry, so passing it via modules: makes aqt fail before any compile. Fix: delete the modules: line — the default install already contains the QML libraries. Should mention you can verify first-hand from download.qt.io online/qtsdkrepository Updates.xml (note the doubled qt6_693/qt6_693 directory) rather than trusting memory or search results. Bonus: the ~1-minute death before any compile step is the signature of this failure.",
+      "files": []
+    },
+    {
+      "id": 11,
+      "prompt": "typephp 编译出来的 Qt 应用里，我有个按钮 handler 用 function () use (&$state) { $state['count']++; } 改状态，另一个函数 function check(array &$state) 读 $state 想做自检，可读到的永远是旧值。PHP 里跑是对的，编译后就不对，也没任何报错。什么原因？",
+      "expected_output": "Identify the AOT by-reference capture divergence (aot-pitfalls.md #10): under the interpreter the closure capture, the caller variable and the by-ref parameter share one zval storage; under AOT they are different storages, so handler writes never reach the by-ref parameter — with no error and a clean lastError. Must NOT suggest debugging the parameter passing; the prescribed fix is to read handler-mutated state through the widget tree readback (value($id)) — which is also the GUI's real semantics — and to know that a checker taking the state by reference proves nothing because it reads its own stale copy (it passes because of the bug). Should note this cannot be reproduced by FakeBridge/unit tests, only by the real binary.",
+      "files": []
     }
   ]
 }

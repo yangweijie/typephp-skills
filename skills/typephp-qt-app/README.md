@@ -67,7 +67,7 @@ $app->on('greet_btn', 'click', function () use (&$state) {
 | 编译报错 / 链接报错 | AOT 陷阱逐条：症状、根因、修法 | `references/aot-pitfalls.md` |
 | 三平台构建与部署 | `project.yml`、`windeployqt`、`.app` 打包、DLL 闭包 | `references/build-and-deploy.md` |
 | 加一个新 Qt 模块 | 缺哪个模块、要改哪三处 | `references/qt-modules.md` |
-| 用 QML 而不是 Widgets | `QQmlApplicationEngine` 桥与 `.qml` 部署 | `references/qml-route.md` |
+| 用 QML 而不是 Widgets | 包的 `qml` 控件（`WidgetTree::qml()` + `QT_QML`，双平台实测）与手写 `QQmlApplicationEngine` 桥；部署真相（`qml/` 目录不需要、Windows 7-DLL 闭包、CI qtdeclarative 坑） | `references/qml-route.md` |
 | 做托盘常驻应用 | 三个平台的托盘差异、两个被反转的假设 | `references/system-tray.md` |
 
 ## 安装
@@ -114,13 +114,13 @@ qtphp run .           # 运行
 qtphp package .       # 打自包含包，并做自检
 ```
 
-体积敏感的场景加 `--nano`：把 php-nano 和 PHPX 源码直接编进产物，完全不链接 PHP 运行时（技能内记录 Apple Silicon 已验证；其余平台未验证）。
+体积敏感的场景加 `--nano`：把 php-nano 和 PHPX 源码直接编进产物，完全不链接 PHP 运行时（技能内记录 Apple Silicon 与 Windows 已验证；Linux 未验证）。Windows 上 nano 也会部署 Qt/MSVC 运行库与 assets，只跳过 PHP 运行时段。
 
 ## 目录结构
 
 ```
 typephp-qt-app/
-├── SKILL.md                      # 路由决策、20 条硬规则、Windows 工具链陷阱
+├── SKILL.md                      # 路由决策、21 条硬规则、Windows 工具链陷阱
 ├── README.md
 ├── references/                   # 7 篇按需加载的深文档
 │   ├── aot-pitfalls.md           # 只在编译产物里出现的 9 类陷阱
@@ -165,10 +165,10 @@ qtphp run . --difftest       # 表格/树 diff 的边界（选中、行 id、pat
 
 ## 已知边界
 
-- 技能编写于 2026-10，`yangweijie/typephp-qt` 当前最新为 **v0.9.5（2026-10-15）**。命令行与 `WidgetTree` 签名按 **v0.9.x** 记录，安装时请钉 `^0.9`；升级到 0.10 之后，先跑一遍 `qtphp doctor`，并以包自带的 `README.md`、`tests/WidgetTreeTest.php` 为准。
-- 实测重心在 **Windows / MSVC**（`windeployqt`、`/Zc:__cplusplus`、`runtime.ini`）；macOS 的 `.app` 打包与 Apple Silicon 的 `--nano` 有实测记录；Linux 覆盖度最低。
-- `--nano` 的产物体积数字来自技能内的记录，**只在 Apple Silicon 上验证过**，其他平台未复验。
-- 规则 16、17 是**上游缺陷**（已标注 `Upstream defect` / `Upstream gap`），不是使用者的错；修复方式在各自条目里写明。
+- 技能编写于 2026-10，`yangweijie/typephp-qt` 当前最新 tag 为 **v0.9.5（2026-10-15）**。命令行与 `WidgetTree` 签名按 **v0.9.x** 记录，安装时请钉 `^0.9`；升级到 0.10 之后，先跑一遍 `qtphp doctor`，并以包自带的 `README.md`、`tests/WidgetTreeTest.php` 为准。**QML 控件支持（`WidgetTree::qml()` + `QT_QML`，2026-11）晚于 v0.9.5，在 `main` 上**——需要它就 `composer require yangweijie/typephp-qt:dev-main` 或等下个 tag。
+- 实测重心在 **Windows / MSVC**（`windeployqt`、`/Zc:__cplusplus`、`runtime.ini`）；macOS 的 `.app` 打包与 Apple Silicon 的 `--nano` 有实测记录；QML 双平台（macOS / Windows）都有实测记录（`examples/qmlclock` 端到端 + CI）；Linux 覆盖度最低。
+- `--nano` 的产物体积数字来自技能内的记录，Apple Silicon 与 Windows 已复验（Windows 上 CI 以 `--nano` 编译两个示例并跑无头自测），Linux 未复验。
+- 规则 18、19 是**上游缺陷**（已标注 `Upstream defect` / `Upstream gap`），不是使用者的错；修复方式在各自条目里写明。
 - `scripts/scaffold.sh` 不内置任何机器相关路径：`PHP_HOME` 取自 `PHP_HOME_DIR` 或 `$PHP_HOME`，`QT_ROOT` 取自第 3 个参数。没给就在生成的 `.bat` 里留空，`build.bat` 会直接报「未设置」并退出，而不是拖到链接阶段才失败。`vcvars64.bat` 由生成的脚本按 `VCVARS` → VS 2022 / 2019 默认安装位置（`%ProgramFiles%` / `%ProgramFiles(x86)%`）自行探测；**VS 装在非默认盘时探测不到，需先导出 `VCVARS=<路径>`**。生成的 `.bat` 内 echo 文本里的括号必须写成 `^( ^)` —— 在 `if (...)` 块内未转义的括号会让块尾部无条件执行（实测：`PHP_HOME` 已设置仍触发「未设置」分支退出）。
 
 ## 许可

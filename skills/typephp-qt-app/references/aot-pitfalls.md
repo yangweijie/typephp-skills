@@ -6,7 +6,7 @@ TypePHP compiles PHP ahead-of-time to native code. The compiler is stricter than
 
 Read this before your first compiled run.
 
-**Numbering:** entries 1–8 here are SKILL.md hard rules 1–8, one-to-one. Entry 9 is SKILL.md rule 20 (it sits last here because it is the only one the compiler catches for you).
+**Numbering:** entries 1–8 here are SKILL.md hard rules 1–8, one-to-one. Entry 9 is SKILL.md rule 20 (it sits last here because it is the only one the compiler catches for you). Entry 10 is SKILL.md rule 21 — a runtime semantics divergence, like entries 1–8.
 
 ---
 
@@ -198,6 +198,33 @@ if ($n > 0) {
 **Test it** — this one *is* caught by the compiler, so a build is enough. It is listed here because
 the error points at generated code (`build/src/main.cc:54`), not at your source line, which sends you
 looking in the wrong place.
+
+---
+
+## 10. A by-reference closure capture is invisible to a by-reference function parameter
+
+**Symptom** — no error anywhere. An event handler writes into a `use (&$state)` capture; a helper
+declared `function self_test(array &$state)` reads back the **old** value forever. `lastError()` stays
+clean, every frame renders, and the exact same code under the normal interpreter shares one storage
+(plain PHP zval aliasing: capture, caller variable and by-ref parameter all point at the same zval).
+Found in the QML example's selftest: the handler probe self-incremented to 2, the by-ref parameter
+read back 0, five probes deep (`enqueue → poll → drain → handleEvent → handler`) — every layer in
+between behaved, so the divergence was only pinned down at the closure boundary.
+
+**Cause** — under AOT the closure's captured reference and the by-ref parameter of another function
+end up as **different storages**. This is a real PHP semantics divergence in the compiled binary,
+not a user error, and like every trap in entries 1–8 it cannot be reproduced by `FakeBridge` or any
+interpreter test.
+
+**Fix** — do not pass handler-mutated state into another function by reference to read it back.
+Cross-function reads of what an event handler changed go through the **widget tree readback**
+(`value($id)`), which is also the GUI's real semantics: the widget tree *is* what the user sees, so
+asserting on it asserts on the product, not on an internal. (The `qml` widget's contract is built on
+this — readbacks and event payloads come from the tree, never from PHP-side captures.)
+
+**Test it** — a `--selftest` assertion that reads back through `value()`, never one that passes
+`&$state` into a checker function. A checker taking the state by reference proves nothing: it reads
+its own stale copy and passes *because* of the bug.
 
 ---
 

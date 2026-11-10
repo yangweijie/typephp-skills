@@ -16,7 +16,7 @@ qtphp run . [args…]     # runs the artifact, args pass through; does a depende
 qtphp package .         # self-contained bundle + self-check
 ```
 
-`--nano` is the size lever when the client complains about a 25 MB binary: the artifact drops to ≈4.4 MB (Apple Silicon measured, `-O2`) and a packaged `.app` from 83.6 to 64.1 MiB. No extra yml is needed — nano ignores a `php-builder:` section, and the package templates already pin `cxx-std: c++17` (nano rejects `c++20`) plus `optimize: 2`. **Only Apple Silicon has been verified on real hardware**; Windows/Linux pass the flag through untested. What nano cannot shrink is Qt: ICU alone is ~56% of the `.app`.
+`--nano` is the size lever when the client complains about a 25 MB binary: the artifact drops to ≈4.4 MB (Apple Silicon measured, `-O2`) and a packaged `.app` from 83.6 to 64.1 MiB. No extra yml is needed — nano ignores a `php-builder:` section, and the package templates already pin `cxx-std: c++17` (nano rejects `c++20`) plus `optimize: 2`. **Apple Silicon and Windows are verified on real hardware** (Windows: CI compiles both examples `--nano` and runs their selftests offscreen); Linux passes the flag through untested. A nano exe still imports the Qt DLLs and the dynamic MSVC runtime (`MSVCP140` / `VCRUNTIME140` / `VCRUNTIME140_1`, measured), so `qtphp build` deploys that set plus `assets/` in nano mode too — it only skips the PHP runtime DLLs, which a nano exe genuinely does not import. What nano cannot shrink is Qt: ICU alone is ~56% of the `.app`.
 
 What follows is the manual route — read it when you are hand-writing the bridge (SKILL.md route 1), when you need to understand what `qtphp` is doing, or when a package build fails and you have to drop a level.
 
@@ -191,6 +191,8 @@ For a plain Widgets app it is:
 phpx.dll  php8ts.dll  libmpdec++-4.0.1.dll  libmpdec-4.0.1.dll  gmp-10.dll  mpfr-6.dll
 ```
 
+plus the Qt DLLs the exe names (`Qt6Core.dll` `Qt6Gui.dll` `Qt6Widgets.dll`, `Qt6Network.dll` if the exe imports it — an unused Network copy bloats the artifact and implies a link that is not there).
+
 Confirm it for any build with:
 
 ```bat
@@ -200,6 +202,15 @@ dumpbin /nologo /dependents <app>.exe | findstr /I /R /C:"\.dll"
 then repeat on each non-system DLL it names, until you reach only
 `api-ms-win-*` / `KERNEL32` / `USER32` / … . **Add to the list if you load PHP
 extensions**: `pdo_sqlite` needs `libsqlite3.dll`, for example.
+
+**QML apps (`/DQT_QML`) add a 7-DLL closure that the exe's own import table cannot reveal.** The exe names only `Qt6Qml.dll` and `Qt6QuickWidgets.dll` (what you link); the rest is reachable only through Qt's DLLs — `Qt6Quick.dll → Qt6QmlMeta.dll → Qt6QmlWorkerScript.dll`, plus `Qt6QmlModels.dll` and `Qt6OpenGL.dll`. So the full set for a QML build is:
+
+```
+Qt6Qml.dll  Qt6QmlModels.dll  Qt6QmlMeta.dll  Qt6QmlWorkerScript.dll
+Qt6Quick.dll  Qt6QuickWidgets.dll  Qt6OpenGL.dll
+```
+
+Copying only what the exe names fails at launch, and a missed *transitive* DLL fails **anonymously** — Git Bash prints `?: cannot open shared object file` with no name, and the native loader popup says only 0xC0000135. Copy one DLL at a time, run, repeat, and you will find `QmlMeta` is the one that drags in `QmlWorkerScript`. `qtphp build` (2026-11, unreleased) does all of this automatically, driven by the exe's import table; hand-rolled `package.bat` scripts must list the seven explicitly. The `qml/` module directory, by contrast, is **not** needed for `import QtQuick` scenes — see `references/qml-route.md` for the measured mechanism.
 
 ### The `assets/` convention
 

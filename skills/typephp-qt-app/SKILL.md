@@ -20,7 +20,7 @@ You can get that bridge in two ways. **Pick route 0 unless you have a reason not
 
 `yangweijie/typephp-qt` is the packaged form of everything in route 1. You never touch C++. You describe the UI as a PHP array. The bundled bridge diffs it against the live Qt widgets each frame.
 
-Pin the minor version: the CLI flags and `WidgetTree` signatures below were written against **v0.9.x** (latest v0.9.5, 2026-10-15). A floating constraint will silently pick up a release that moves them.
+Pin the minor version: the CLI flags and `WidgetTree` signatures below were written against **v0.9.x** (latest tag v0.9.5, 2026-10-15). A floating constraint will silently pick up a release that moves them. **The QML widget support below is newer than v0.9.5** — it landed on `main` 2026-11-10 and is still in the changelog's Unreleased section; require `yangweijie/typephp-qt:dev-main` for it (or wait for the next tag), and expect everything else to work unchanged on v0.9.5.
 
 ```bash
 composer require "yangweijie/typephp-qt:^0.9"
@@ -28,7 +28,7 @@ qtphp doctor            # check PHP / tpc / Qt / compiler / PHPUnit before anyth
 qtphp new myapp         # scaffold a project that compiles as-is
 cd myapp
 qtphp build .           # tpc compile (+ auto-deploys runtime DLLs on Windows)
-qtphp build . --nano    # nano mode: php-nano + PHPX compiled in, links NO PHP runtime (Apple Silicon verified)
+qtphp build . --nano    # nano mode: php-nano + PHPX compiled in, links NO PHP runtime (Apple Silicon + Windows CI verified)
 qtphp run .             # run; args after the path pass straight through
 qtphp package .         # self-contained bundle + self-check (scans every Mach-O, not just the exe)
 ```
@@ -74,10 +74,11 @@ function main(int $argc, array $argv): void
 
 - **Give every control you touch an `id`.** Nodes without one get a structural-path id (`_p0.1.2`). That id is stable but unreadable. `text('name_input')` needs a real id.
 - **Containers**: `vbox hbox grid form group frame scroll tabs tab stack page split spacer separator`.
-- **Controls**: `label button lineedit textedit spin doublespin slider progress checkbox radio combo list table tree image link`.
+- **Controls**: `label button lineedit textedit spin doublespin slider progress checkbox radio combo list table tree image link qml`.
 
 Signatures that are easy to guess wrong (verified against `src/WidgetTree.php`): `WidgetTree::table(array $columns, array $rows, array $props = [])` — `$columns` is a flat list of header strings, `$rows` a list of cell-value arrays. Row identity for the `select` event and for selection restore across re-renders comes from a separate **`row_ids` prop** (positional strings; default is the row index). `WidgetTree::webView(string $url = '', array $props = [])`.
 - **Embedded web**: `webview`. The build picks the backend at compile time, per platform. Windows = WebView2 (full Chromium + JS). macOS = the system WKWebView (JS + remote `https://`). Anything else = QTextBrowser (HTML subset, **no JS**, remote `url` unsupported). Ask at runtime with `QtApp::webViewBackend()` (`webview2` / `wkwebview` / `textbrowser`) and `webViewSupportsJs()`. Degrade instead of failing silently. History is driven by `webViewReload()` / `webViewGoBack()` / `webViewGoForward($id)`.
+- **Embedded QML** *(on `main`, newer than v0.9.5 — see the version note)*: `WidgetTree::qml(string $source = '', array $props = [])` drops a QML scene into the Widgets tree via `QQuickWidget`. It is a **leaf** — no children. Compile-time opt-in: the yml needs `-DQT_QML` plus the QtQml / QtQuick / QtQuickWidgets include dirs and libs (the `qtphp new` scaffold already compiles `qt_qml.cc` but leaves the flag off, so a QML widget in a default scaffold degrades to a diagnostic placeholder label instead of failing). PHP→QML goes through `props` (declare each writable property there), QML→PHP through signals — the event **type is the signal name**, and the payload is a snapshot of the properties you list in `read`. Read back with `value($id)` both for PHP-written props and QML-mutated ones. `QtApp::qmlAvailable()` asks whether the flag was on; `qmlStatus($id)` returns `['status' => …, 'errors' => […]]` — **the explicit error channel** (a bad `.qml` path or syntax error never throws; it lands there), so a selftest must assert `errors` is empty. `qmlReload($id)` re-instantiates the component; props are replayed onto the new root, signals are re-wired. Reference app: `examples/qmlclock` in the package repo. Full details incl. the deployment truth (no `qml/` directory needed; the Windows side needs a 7-DLL closure the CLI deploys for you): `references/qml-route.md`.
 - **Events**: `click press release change submit commit toggle select activate itemClick cell expand collapse tab close menu timer tray loaded navigating title`. Register with `on($id, $type, $handler)` or `onAny($type, $handler)`. When both match, **both fire** (specific first, then the wildcard). That is why `onAny` is the place for logging and telemetry.
 - **`patch()`** is the imperative escape hatch for hot paths (log streams, progress ticks). It can `set` props or `call` one of `appendRows / clear / setText / setValue / select / focus`. It is a bypass. The next `render()` re-syncs from the tree, so write long-lived changes back into state.
 
@@ -99,7 +100,7 @@ qtphp run . --selftest       # fire every registered event — catches handler w
 qtphp run . --difftest       # table/tree diff boundaries (selection, row ids, patches)
 ```
 
-Set `$app->headless(true)` for these. It makes `message()` return its default and file dialogs return empty. So a modal dialog cannot block a CI run forever. On a box with no GUI session, also set `QT_QPA_PLATFORM=offscreen`.
+Set `$app->headless(true)` for these. It makes `message()` return its default and file dialogs return empty. So a modal dialog cannot block a CI run forever. On a box with no GUI session, also set `QT_QPA_PLATFORM=offscreen` — and for QML widgets add `QT_QUICK_BACKEND=software`, so the scene renders without a GPU (measured green on a CI runner; a QML selftest should assert on `value()` readbacks, received events, and `qmlStatus($id)['errors']` being empty — the `status` field itself is informational only: measured it stays `loading` under offscreen on macOS/Qt 6.12 but reaches `ready` on Windows/Qt 6.9.3, so it must never be a pass/fail criterion).
 
 **`--selftest` is not optional polish.** It is the only check that catches the AOT handler-arity trap below. The PHP unit tests run on a tolerant interpreter and cannot reproduce it.
 
@@ -136,7 +137,7 @@ Two files declare the boundary. The compiler needs **both**:
 | Route | Use when | Cost |
 |---|---|---|
 | **Qt Widgets** | Desktop tools, forms, tables, dashboards. **Default.** | Lowest. No QML engine, no `qml/` directory to deploy. |
-| **QML / Quick** | Heavy animation, touch/mobile feel, fully custom styling. | Needs Qt6Qml + Qt6Quick and `windeployqt --qmldir`. Without them the app starts blank. |
+| **QML / Quick** | Heavy animation, touch/mobile feel, fully custom styling. | Needs Qt6Qml + Qt6Quick (+Qt6QuickWidgets to embed in a Widgets shell) at **link time**, and at runtime the 7-DLL Windows closure — the CLI deploys it for you. `windeployqt --qmldir` is **not** required for `import QtQuick` scenes (measured: the qmldir loads from a built-in resource). Blank start = missing DLLs, not a missing `qml/` dir. |
 
 Start with Widgets unless the user explicitly asks for QML. If they do, read `references/qml-route.md`. You can also mix: `QtQuickWidgets` embeds a QML scene in a Widgets window.
 
@@ -173,7 +174,7 @@ scripts/scaffold.sh --tray <dir> <app_name> [qt_root]   # system-tray app
 
 ## Hard rules
 
-Each of these silently breaks a build, a run, or a click. Rules 1–8 are **AOT-specific**. They do not reproduce under a normal PHP interpreter, so a passing unit test proves nothing about them. Details and fixes: `references/aot-pitfalls.md` — its entries 1–8 are numbered to match, and entry 9 is rule 20.
+Each of these silently breaks a build, a run, or a click. Rules 1–8 are **AOT-specific**. They do not reproduce under a normal PHP interpreter, so a passing unit test proves nothing about them. Details and fixes: `references/aot-pitfalls.md` — its entries 1–8 are numbered to match, entry 9 is rule 20, and entry 10 is rule 21.
 
 1. **The compiler checks closure arity exactly.** AOT-compiled closures raise `ArgumentCountError` on an extra argument. Plain PHP silently ignores it. `function () {}` called as `$f($event)` works everywhere except in the compiled binary. There it fails **only when that control is actually clicked**. Call each handler with the argument count it declares, or dispatch defensively.
 2. **Global scope takes declarations only.** No `require_once`/`require` anywhere, not at global scope and not inside a function. It is `All execution code must be within a function, found stray code`. Cross-file visibility comes from `project.yml`'s `sources:`, never from `require`.
@@ -190,17 +191,18 @@ Rules 9–16 apply to both routes:
 10. **The C++ symbol needs the `php_` prefix.** PHP `qt_board_create` ⇄ C++ `php_qt_board_create`. Wrong ⇒ unresolved symbol at link time.
 11. **`QApplication` must exist before any widget.** Create it lazily behind a null check, so it happens exactly once.
 12. **You drive the event loop yourself.** Qt must not block on `exec()`. Pump in ~16 ms slices and drain a queue into PHP. The package does this for you.
-13. **Deploy plugins, not just DLLs.** Skipping `windeployqt` gives "could not find or load the Qt platform plugin windows". For QML add `--qmldir`.
+13. **Deploy plugins, not just DLLs.** Skipping `windeployqt` gives "could not find or load the Qt platform plugin windows". For a QML app the runtime DLL closure matters more than `--qmldir`: the 7-DLL set (`Qt6Qml` / `QmlModels` / `QmlMeta` / `QmlWorkerScript` / `Quick` / `QuickWidgets` / `OpenGL`) is invisible to a per-DLL probe, and a transitive miss fails anonymously. Measured: `import QtQuick` needs no `qml/` directory at all — its qmldir ships inside the Qt libraries. See `references/qml-route.md`.
 14. **UTF-8 at the boundary** — always `QString::fromUtf8` / `toUtf8`, or CJK text mangles.
 15. **Include the header for every class you name.** Also declare a file-scope `static` *above* the class that uses it. Qt has no guaranteed transitive includes. Both mistakes surface as unrelated-looking `C2027` / `C2065`.
 16. **A tray app inverts two assumptions**: `setQuitOnLastWindowClosed(false)`, and loop `while (is_alive)` not `while (is_open)`. See `references/system-tray.md`.
 
-Rules 17–20 are API/compiler traps found by running a real app. Rules 17–19 compile fine and fail silently at runtime. Rule 20 fails at compile time, but points at generated code, not your source:
+Rules 17–21 are API/compiler traps found by running a real app. Rules 17–19 and 21 compile fine and fail silently at runtime. Rule 20 fails at compile time, but points at generated code, not your source:
 
 17. **`WidgetTree::tabs()` takes a `title => children` map, not tab nodes.** `tabs(['页一' => [...], '页二' => [...]], ['id' => 't'])`. The implementation re-wraps every element with `tab()`. That function's `$title` is `string`. So passing pre-built `tab(...)` nodes throws `ArgumentTypeError: Argument #1 ($title) must be of type string, int given` (the int is the array index). The package's own `docs/` shows the wrong form. `tests/WidgetTreeTest.php` shows the right one. The same shape applies to `stack()`.
 18. **The bridge applies tab/stack `current` *before* the children exist, so first-frame declarative selection silently no-ops.** `buildNode` runs `applyNodeProps` and only then recurses into children. So on the frame the bridge creates a `QTabWidget`, it clamps `setCurrentIndex(1)` back to 0. Because the prop signature was already recorded, no later frame retries it. Changing `current` on a *later* frame works. `patch(['op'=>'call','method'=>'select',...])` works immediately. **Consequence for `--shot`**: a tab you select only via `current` on frame 1 will not appear. Render one frame, `patch` the `select`, then render again. Also pass an **int**, not a string. The bridge does `value.toInt()`, and `'1'` becomes `0`. (Upstream defect. Fixed by deferring the apply to after `syncChildren`.)
 19. **`table` has no row-height control, so the widget elides multi-line cell text to `…`.** Row height comes from the widget default. `qtRebuildTable` never calls `resizeRowsToContents()`. A 3-line cell in a normal-height row renders as `...`. Do you want a multi-line cell (a graph column, a wrapped diff)? Then keep it to **one line**. Otherwise add the `row_height` prop or an auto-resize to the bridge. (Upstream gap.)
 20. **A property read inside a `&&` short-circuit cannot be written in the same `if` body.** `if ($n > 0 && $n !== $obj->limit) { $obj->limit = $n; }` fails to compile with `use of undeclared identifier '_object_prop_state_x__limit'` in a generated `.cc`. The short-circuit becomes an immediately-invoked lambda, and that lambda declares the property reference inside its own scope. Hoist the read into a local first. Details: `references/aot-pitfalls.md` #9.
+21. **A by-reference closure capture (`use (&$x)`) is invisible to a by-reference function parameter.** A handler that does `function () use (&$state) { $state['n']++; }` and a helper declared `function self_test(array &$state)` do **not** share storage under AOT: the handler's writes stay in the closure's capture, the parameter reads the caller's old value — `lastError` stays clean and the interpreter shows the same code working (verified: handler self-increments to 2, reference param reads 0, five probes deep). This is a real PHP semantics divergence in the compiled binary, not a user error. Cross-function reads of handler-mutated state must go through the **widget tree readback** (`value($id)`) — which is also the GUI's real semantics. Details: `references/aot-pitfalls.md` #10.
 
 ## Windows runtime + toolchain
 
@@ -212,6 +214,8 @@ Rules 17–20 are API/compiler traps found by running a real app. Rules 17–19 
 - **`/Zc:__cplusplus` and `/permissive-` are mandatory** with the Qt MSVC SDK.
 - **Two `tpc` distributions exist and their runtimes differ.** A native release package is self-contained (`phpx.dll`/`SDK/` sit beside the executable). The Composer-installed driver instead needs a `swoole/phpx` source tree whose build artifacts usually do not exist yet. Picking the wrong one fails with `The PHPX runtime library was not found at: ...\phpx\build\phpx.dll`. `qtphp` probes for the one that has a runtime. `TPC`/`TPC_DIR` override it. See `references/aot-pitfalls.md`.
 - **In a *consumer* project `qtphp` cannot find `tpc` on its own.** `bin/qtphp` sets `$GLOBALS['rootDir'] = dirname(__DIR__)`. That is the **package** directory (`vendor/yangweijie/typephp-qt`), not your project. So it looks for `vendor/yangweijie/typephp-qt/vendor/bin/tpc.php`, which does not exist. Then `qtphp doctor` reports `tpc: 未找到`. Fix: install the driver in your own project (`composer require --dev swoole/typephp`) **and** export `TPC="$PWD/vendor/bin/tpc.php"` (or add it to `composer.json` `scripts`). Without it every `build`/`run`/`package` fails at the toolchain probe, not at compile time.
+- **Do not pass `modules: qtdeclarative` to `jurplel/install-qt-action` on Windows.** For Qt 6 desktop, qtdeclarative ships in the **base** component's `DownloadableArchives` (measured first-hand in Qt's Updates.xml for 6.9.3: qtbase / qtsvg / qtdeclarative / qttools / qttranslations / d3dcompiler_47 / opengl32sw), and there is **no** `addons.qtdeclarative` entry — so the flag makes aqt die in ~1 minute with `packages ['qtdeclarative'] were not found while parsing XML of package information`, before any compile. Just drop the flag; the QML libraries are already there (verified in a default-selection online-installer install too).
+- **On Windows, `qtphp build` deploys the runtime DLL closure into `build/` automatically, exe-import driven.** A plain Widgets app gets Qt6Core/Gui/Widgets (+Network only if the exe imports it). When the exe imports `Qt6Qml.dll` (i.e. it is a QML app), it adds the full **7-DLL QML closure** — Qml, QmlModels, QmlMeta, QmlWorkerScript, Quick, QuickWidgets, OpenGL — because the transitive chain Quick → QmlMeta → QmlWorkerScript lives only in Qt's own DLL import tables and can never be seen from the exe (the exe itself only names Qml and QuickWidgets). It also deletes stale DLLs a previous QML/embed build left behind. `--nano` deploys the same non-PHP set (Qt DLLs, MSVC runtime, assets) and skips/cleans only the PHP runtime DLLs — a nano exe imports none of them (measured). The failure this automation prevents is nasty: a transitive miss loads as `?: cannot open shared object file`, **without naming the DLL**.
 
 ## Reference index
 
@@ -222,7 +226,7 @@ Read the file matching what you are doing. Do not read them all.
 - `references/qt-widgets-catalog.md` — **every** Qt Widgets class in the install, grouped by purpose. Consult when choosing controls.
 - `references/qt-modules.md` — which Qt modules the install has, which it does not, and the three edits to link a new one.
 - `references/build-and-deploy.md` — per-platform build/deploy/run, `runtime.ini`, packaging (`windeployqt`, macOS `.app`, Linux bundle), and the shell gotchas that waste the most time.
-- `references/qml-route.md` — the QML/Quick route: `QQmlApplicationEngine` bridge, `.qml` deployment, when to prefer it.
+- `references/qml-route.md` — the QML/Quick route, both forms: the **package's `qml` widget** (`WidgetTree::qml()` + `QT_QML`, verified end-to-end on macOS and Windows) and the hand-written `QQmlApplicationEngine` bridge; plus the measured deployment truth (no `qml/` directory needed for `import QtQuick` on either platform, the Windows DLL closure, the CI qtdeclarative gotcha) and when to prefer QML at all.
 - `references/system-tray.md` — system tray with `QSystemTrayIcon`, cross-platform (Windows notification area / macOS menu bar / Linux SNI).
 
 Templates: `assets/templates/` (`project.windows.yml`, `project.macos.yml`, `project.linux.yml`, `runtime.ini`, `stub.skeleton.php`, `bridge.skeleton.cc`, `main.skeleton.php`, `store.skeleton.php`, `controller.skeleton.php`, and for tray apps `tray.stub.skeleton.php` + `tray.skeleton.cc`).
